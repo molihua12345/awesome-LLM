@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="never" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。" />
+    <meta property="og:description" content="FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码分析] Facebook如何训练超大模型---(1) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15815013.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15815013.html",
+      "headline": "[源码分析] Facebook如何训练超大模型---(1)",
+      "description": "[源码分析] Facebook如何训练超大模型 (1) 0x00 摘要 我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。 而FSDP（Fully Sharded Dat",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-17T19:47:00.0000000&#x2B;08:00",
+      "dateModified": "2022-01-17T19:47:00.0000000&#x2B;08:00",
+      "wordCount": "14148",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15815013;
+            window.currentPostDateAdded = '2022-01-17 19:47';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15815013.html" title="发布于 2022-01-17 19:47">
+    <span role="heading" aria-level="2">[源码分析] Facebook如何训练超大模型---(1)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码分析-facebook如何训练超大模型---1">[源码分析] Facebook如何训练超大模型---(1)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码分析-facebook如何训练超大模型---1" rel="noopener nofollow">[源码分析] Facebook如何训练超大模型---(1)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-简介" rel="noopener nofollow">0x01 简介</a><ul><li><a href="#11-fair--fsdp" rel="noopener nofollow">1.1 FAIR &amp; FSDP</a></li><li><a href="#12-大规模训练计算能力需求" rel="noopener nofollow">1.2 大规模训练计算能力需求</a></li></ul></li><li><a href="#0x02-fsdp-如何工作" rel="noopener nofollow">0x02 FSDP 如何工作</a><ul><li><a href="#21-全参数分片" rel="noopener nofollow">2.1 全参数分片</a></li><li><a href="#22-比对" rel="noopener nofollow">2.2 比对</a></li><li><a href="#23-梳理" rel="noopener nofollow">2.3 梳理</a><ul><li><a href="#231-思路" rel="noopener nofollow">2.3.1 思路</a></li><li><a href="#232-流程步骤" rel="noopener nofollow">2.3.2 流程步骤</a></li></ul></li></ul></li><li><a href="#0x03-how-to-use-fsdp" rel="noopener nofollow">0x03 How to use FSDP</a><ul><li><a href="#31-在语言模型中使用fsdp" rel="noopener nofollow">3.1 在语言模型中使用FSDP</a></li><li><a href="#32-在计算机视觉模型之中使用fsdp" rel="noopener nofollow">3.2 在计算机视觉模型之中使用FSDP</a></li><li><a href="#33-在pytorch-lightning使用fsdp" rel="noopener nofollow">3.3 在PyTorch Lightning使用FSDP</a></li><li><a href="#34-直接从fairscale使用fsdp库" rel="noopener nofollow">3.4 直接从FairScale使用FSDP库</a></li></ul></li><li><a href="#0x04-内存管理" rel="noopener nofollow">0x04 内存管理</a></li><li><a href="#41-optimizer-state-sharding-oss" rel="noopener nofollow">4.1 Optimizer State Sharding (OSS)</a><ul><li><ul><li><a href="#411-训练流程" rel="noopener nofollow">4.1.1 训练流程</a></li><li><a href="#412-最佳实践" rel="noopener nofollow">4.1.2 最佳实践</a></li><li><a href="#413-性能" rel="noopener nofollow">4.1.3 性能</a></li></ul></li></ul></li><li><a href="#42-optimizer--gradient-state-sharding" rel="noopener nofollow">4.2 Optimizer + Gradient State Sharding</a><ul><li><ul><li><a href="#421-训练过程" rel="noopener nofollow">4.2.1 训练过程</a></li><li><a href="#422-最佳实践" rel="noopener nofollow">4.2.2 最佳实践</a></li></ul></li></ul></li><li><a href="#43-optimizer--gradient--horizontal-model-sharding" rel="noopener nofollow">4.3 Optimizer + Gradient + Horizontal Model Sharding</a><ul><li><ul><li><a href="#431-训练过程" rel="noopener nofollow">4.3.1 训练过程</a></li><li><a href="#432-最佳实践" rel="noopener nofollow">4.3.2 最佳实践</a></li><li><a href="#433-性能" rel="noopener nofollow">4.3.3 性能</a></li></ul></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。</p>
+<p>而FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。Parameter sharding 就是把模型参数等切分到各个GPU之上。我们会以 Google，微软和 Facebook 的论文，博客以及代码来进行学习分析。</p>
+<p>本系列其他文章如下：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15782054.html" target="_blank">源码解析] PyTorch 分布式之 ZeroRedundancyOptimizer</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15785669.html" target="_blank">论文翻译] 分布式训练 Parameter sharding 之 ZeRO</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15795044.html" target="_blank">论文翻译] 分布式训练 Parameter Sharding 之 Google Weight Sharding</a></p>
+<h2 id="0x01-简介">0x01 简介</h2>
+<h3 id="11-fair--fsdp">1.1 FAIR &amp; FSDP</h3>
+<p>大规模训练人工智能模型并不容易。除了需要大量的计算能力和资源外，训练非常大的模型背后还有相当大的工程复杂性。Facebook人工智能研究（FAIR）工程部一直致力于构建工具和基础设施，以使大型人工智能模型的培训变得更容易。</p>
+<p>Fully Sharded Data Parallel（FSDP）是FAIR引入的最新工具。它将AI模型的参数在数据并行worker之间进行切分，并且可以选择将部分训练计算卸载到CPU。顾名思义，<u>FSDP是一种数据并行训练算法</u>。尽管参数被分片到不同的GPU，但每个微批次数据的计算对于每个GPU worker来说仍然是本地的。这种概念上的简单性使FSDP更易于理解，并且更适用于各种使用场景（与层内并行和流水线并行相比）。与optimizer state+gradient sharding数据并行方法相比，<u>FSDP在训练过程中通过通信和计算重叠对模型参数进行更均匀的切分</u>，具有更好的性能。</p>
+<p>FSDP可以使用更少的GPU更有效地训练数量级更大的模型。FSDP已在FairScale库中实现，允许工程师和开发人员使用简单的API扩展和优化其模型的培训。在Facebook，FSDP已经被整合并测试，用于训练一些NLP和Vision模型。</p>
+<h3 id="12-大规模训练计算能力需求">1.2 大规模训练计算能力需求</h3>
+<p>大规模模型训练需要大量的计算资源，比如OpenAI的GPT-3 拥有1750亿个参数。其训练估计需要355年的GPU时间，相当于1000个GPU连续工作4个月以上。</p>
+<p>除了需要大量计算和工程资源外，大多数的训练扩展方法都会带来额外的通信成本，并且需要工程师仔细评估内存使用和计算效率之间的权衡。例如，典型的数据并行培训要求在每个GPU上维护模型的冗余副本，而模型并行培训为在worker（GPU）之间移动激活引入了额外的通信成本。</p>
+<p>相比之下，FSDP相对而言没有做任何权衡。它通过在GPU上分割模型参数、梯度和优化器状态来提高内存效率，并通过分解通信并将其与前向和后向过程重叠来提高计算效率。FSDP产生与标准分布式数据并行（DDP）培训相同的结果，并提供易于使用的接口，该接口是PyTorch分布式数据并行模块的替代品。Facebook 的早期测试表明，FSDP可以扩展到数万亿个参数。</p>
+<h2 id="0x02-fsdp-如何工作">0x02 FSDP 如何工作</h2>
+<p>在标准DDP训练中，每个worker处理一个单独的批次，并使用all-reduce对worker之间的梯度进行汇总。虽然DDP已经变得非常流行，<u>但它占用的GPU内存比它实际需要的要多，因为模型权重和优化器状态在所有DDP worker中都有一个副本</u>。</p>
+<h3 id="21-全参数分片">2.1 全参数分片</h3>
+<p>减少副本的一种方法是应用全参数分片（ full parameter sharding）的过程，其中<u>仅提供局部计算所需的模型参数、梯度和优化器的子集</u>。这种方法的一个实现 ZeRO-3 已经被微软所普及。</p>
+<p><u>解锁全参数切分的关键是：我们可以把DDP之中的all reduce操作分解为独立的 reduce-scatter 和 all-gather 操作</u>。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220117193408272-1054977734.png" alt="" loading="lazy"></p>
+<p>图来自 ：<a href="https://engineering.fb.com/wp-content/uploads/2021/07/FSDP-graph-2a.png?w=1024" target="_blank" rel="noopener nofollow">https://engineering.fb.com/wp-content/uploads/2021/07/FSDP-graph-2a.png?w=1024</a></p>
+<p>“All-reduce”是“reduce-scatter”和“all-gather”的组合。聚合梯度的标准 “All-reduce”操作可以分解为两个单独的阶段：“reduce-scatter”和“all-gather”。</p>
+<ul>
+<li>“reduce-scatter”阶段，在每个GPU上，会基于rank 索引对 rank 之间相等的块进行求和。</li>
+<li>“all-gather”阶段，每个GPU上的聚合梯度分片可供所有GPU使用。</li>
+</ul>
+<p>通过重新安排reduce scatter和all gather，每个DDP worker只需要存储一个参数分片和优化器状态。</p>
+<h3 id="22-比对">2.2 比对</h3>
+<p>下图显示了标准DDP训练（上半部分）和FSDP训练（下半部分）：</p>
+<p><img src="https://engineering.fb.com/wp-content/uploads/2021/07/FSDP-Graph-2.png?w=907" alt="Full Sharded Data Parallel graph" loading="lazy"></p>
+<ul>
+<li>
+<p>在标准的数据并行训练方法中，每个GPU上都有一个模型副本，向前和向后传递的序列只在自己的数据分片上进行运行。在这些局部计算之后，每个局部过程的参数和优化器与其他GPU共享，以便计算全局权重更新。</p>
+</li>
+<li>
+<p>在FSDP中：</p>
+<ul>
+<li><strong>Model shard</strong> ：每个GPU上仅存在<strong>模型的分片</strong>。</li>
+<li><strong>All-gather</strong> ：每个GPU通过all-gather从其他GPU收集所有<strong>权重</strong>，以在本地计算前向传播。<u>就是论文思路Pp下划线部分</u>。</li>
+<li><strong>Forward（local）</strong>：在本地进行前向操作。前向计算和后向计算都是利用完整模型。</li>
+<li><strong>All-gather</strong> ：然后在后向传播<u>之前</u>再次执行此<strong>权重</strong>收集。<u>就是论文思路Pp之中的下划线部分</u>。</li>
+<li><strong>Backward（local）</strong>：本地进行后向操作。前向计算和后向计算都是利用完整模型，此时每个GPU上也都是<strong>全部梯度</strong>。</li>
+<li><strong>Reduce-scatter</strong> ：在向后传播<u>之后</u>，局部<strong>梯度</strong>被<u>聚合</u>并且通过 <u>reduce-scatter</u> 在各个GPU上分片，每个分片上的梯度是聚合之后本分区对应的那部分，<u>就是论文思路Pg之中的下划线部分。</u></li>
+<li><strong>Update Weight（local）</strong>：每个GPU更新其局部<strong>权重</strong>分片。</li>
+</ul>
+</li>
+</ul>
+<p>为了最大限度地提高内存效率，我们可以<u>在每层向前传播后丢弃全部权重</u>，为后续层节省内存。这可以通过将FSDP包装应用于网络中的每一层来实现（通过设置reshard_after_forward=True）。</p>
+<p>下面是伪代码实现：</p>
+<pre><code class="language-python">FSDP forward pass:
+    for layer_i in layers:
+        all-gather full weights for layer_i # 权重
+        forward pass for layer_i
+        discard full weights for layer_i # 权重
+
+FSDP backward pass:
+    for layer_i in layers:
+        all-gather full weights for layer_i # 权重
+        backward pass for layer_i
+        discard full weights for layer_i # 权重
+        reduce-scatter gradients for layer_i # 梯度
+</code></pre>
+<h3 id="23-梳理">2.3 梳理</h3>
+<p>我们结合论文思路再来梳理一下 FSDP。</p>
+<h4 id="231-思路">2.3.1 思路</h4>
+<p>论文思路如下：</p>
+<ul>
+<li><strong>Pp: Parameter Partitioning</strong>，每个进程只存储与其分区对应的参数。<u>当<strong>正向和反向传播</strong>需要其分区外的参数时，会通过broadcast操作从适当的数据并行进程接收这些参数</u>。虽然乍一看，这可能会导致显著的通信开销，但我们发现，这种方法只会将基线DP系统的总通信量增加到1.5倍，同时实现与Nd成比例的内存减少。</li>
+<li><strong>Pos : Optimizer State Partitioning</strong>，<u>对于一个<span class="math inline">\(N_d\)</span>并行度的DP来说，我们将优化器状态分组到<span class="math inline">\(N_d\)</span>个相等的分区中，这样第i个数据并行进程只更新与第i个分区对应的优化器状态</u>。因此，每个数据并行过程只需要存储和更新总优化器状态 的$ \frac{1}{N_d}<span class="math inline">\(，然后只更新\)</span> \frac{1}{N_d}$个参数。在每个训练步骤结束时，我们会执行一个跨数据并行进程的all-gather操作，以获得跨所有数据并行进程的完全更新的参数。</li>
+<li><strong>Pg: Gradient Partitioning</strong>，<u>由于每个数据并行进程只负责更新其相应的参数分区，因此，每个节点仅仅对自己负责的那部分参数的梯度进行<strong>规约</strong></u>。在归并之后，每个节点只需要自己参数分区对应的梯度，对于其他的梯度不再需要，所以它们的内存可以被释放。这将梯度的内存占用从2ψ字节缩减到 <span class="math inline">\(\frac{2ψ}{N_d}\)</span>。实际上，这是一种 <strong><u>Reduce-Scatter操作</u></strong>，不同参数的梯度被减少到不同的进程之中。</li>
+</ul>
+<p><strong>总结一下</strong>：因为模型参数被分区，所以参数梯度（在框架实现中，梯度往往是参数的成员变量）自然就被分区了。分区的参数被设置到优化器之中，所以优化器只会优化本分区的参数，所以优化器状态自然就是分区之后的。<u>注意，在前向传播和后向传播时候，每个GPU都是用全部模型来计算，得到的梯度也是全部的梯度，只是存储时候只存储自己分区对应的部分</u>。</p>
+<h4 id="232-流程步骤">2.3.2 流程步骤</h4>
+<p>我们再来展示一下具体流程。假设数据并行度为 n，则有 n 个GPU，那么每个GPU之上保存总模型参数的  1/n，同时梯度，优化器状态就自然被分区了，每个GPU之上还有数据并行。</p>
+<ul>
+<li>起始状态：每个GPU之上是<span class="math inline">\(P_n, G_n, O_n\)</span>。注意，因为本GPU上模型是<span class="math inline">\(P_n\)</span>，所以<span class="math inline">\(O_n\)</span>自然就对应了<span class="math inline">\(P_n\)</span>，就自动分片了。</li>
+<li>正向计算时候，每个 <span class="math inline">\(GPU_n\)</span> 都把自己负责的参数 <span class="math inline">\(P_n\)</span> 广播给其他所有的 GPU，前向计算之后，每个 <span class="math inline">\(GPU_n\)</span> 都得到自己输入训练数据 <span class="math inline">\(data_n\)</span> 的损失 <span class="math inline">\(loss_n\)</span>。</li>
+<li>反向计算时候，每个 <span class="math inline">\(GPU_n\)</span> 也都把自己负责的参数 <span class="math inline">\(P_n\)</span> 广播给其他所有的 GPU，最后计算得到对应于数据 <span class="math inline">\(data_n\)</span>的梯度 <span class="math inline">\(G_n\)</span>。</li>
+<li>将梯度 <span class="math inline">\(G_n\)</span>聚合到对应的<span class="math inline">\(GPU_n\)</span>上，这时候<span class="math inline">\(GPU_n\)</span> 上的梯度就是 <span class="math inline">\(reduce(G_0, ..., G_n)\)</span>  之中自己rank对应的部分。注意，梯度聚合过程则使用了 reduce-scatter，因为每个gpu只需要更新自己负责的部分<span class="math inline">\(P_n,G_n,O_n\)</span>，所以不需要进行all-gather了。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220117193424108-1149764309.png" alt="" loading="lazy"></p>
+<h2 id="0x03-how-to-use-fsdp">0x03 How to use FSDP</h2>
+<p>目前，FAIR 提供四种解决方案来使用FSDP，以适应不同的需求。</p>
+<h3 id="31-在语言模型中使用fsdp">3.1 在语言模型中使用FSDP</h3>
+<p>对于语言模型，可以在通过以下新参数，在 <a href="https://github.com/pytorch/fairseq" target="_blank" rel="noopener nofollow"><em>fairseq</em> framework</a> 之中支持 FSDP：</p>
+<ul>
+<li>–ddp-backend=fully_sharded: 通过FSDP启用完全切分。</li>
+<li>–cpu-offload: 将优化器状态和FP32模型副本卸载到cpu（与–optimizer=cpu_adam结合使用）。</li>
+<li>–no-reshard-after-forward: 提高大模型训练速度 (1B+ params) ，类似于 ZeRO stage 2。</li>
+<li>其他常见选项 (–fp16, –update-freq, –checkpoint-activations, –offload-activations, etc.) 还是继续正常工作。</li>
+</ul>
+<p>具体请参阅<a href="https://github.com/pytorch/fairseq/tree/master/examples/fully_sharded_data_parallel" target="_blank" rel="noopener nofollow">fairseq教程</a>。</p>
+<h3 id="32-在计算机视觉模型之中使用fsdp">3.2 在计算机视觉模型之中使用FSDP</h3>
+<p>对于计算机视觉模型， <a href="https://github.com/facebookresearch/vissl" target="_blank" rel="noopener nofollow">VISSL</a> 中可以支持FSDP，并在regnet架构上进行了测试。像BatchNorm和ReLU这样的层已经被无缝地处理并已经测试过其收敛性。可以使用下面选项来启用 FSDP。</p>
+<ul>
+<li>config.MODEL.FSDP_CONFIG.AUTO_SETUP_FSDP=True</li>
+<li>config.MODEL.SYNC_BN_CONFIG.SYNC_BN_TYPE=pytorch</li>
+<li>config.MODEL.AMP_PARAMS.AMP_TYPE=pytorch</li>
+</ul>
+<p>在如下链接可以继续研究  <a href="https://github.com/facebookresearch/vissl/blob/40441123a6f7098500676ca8800025c1f02e28b3/vissl/config/defaults.yaml#L498-L513" target="_blank" rel="noopener nofollow">this section</a> 。</p>
+<h3 id="33-在pytorch-lightning使用fsdp">3.3 在PyTorch Lightning使用FSDP</h3>
+<p>为了更容易地与更通用的用例集成，PyTorch Lightning已经将FSDP作为beta功能。[此教程](<a href="https://pytorch-lightning.readthedocs.io/en/latest/advanced/advanced_gpu.html#fully-sharded" target="_blank" rel="noopener nofollow">https://pytorch-lightning.readthedocs.io/en/latest/advanced/advanced_gpu.html#fully-sharded</a> training) 包含一个关于如何将FSDP插件与PyTorch Lightning一起使用的详细示例。如下所示，添加plugins='fsdp'可以激活它。</p>
+<pre><code class="language-python">model = MyModel()
+trainer = Trainer(gpus=4, plugins='fsdp', precision=16)
+trainer.fit(model)
+
+trainer.test()
+trainer.predict()
+</code></pre>
+<h3 id="34-直接从fairscale使用fsdp库">3.4 直接从FairScale使用FSDP库</h3>
+<p>FSDP的主要开发库是<a href="https://fairscale.readthedocs.io/en/latest/deep_dive/oss_sdp_fsdp.html" target="_blank" rel="noopener nofollow">FairScale</a>.。您可以通过以下示例直接使用FairScale的FSDP，只需更换DDP。</p>
+<pre><code class="language-python">from fairscale.nn.data_parallel import FullyShardedDataParallel as FSDP
+...
+# sharded_module = DDP(my_module)
+sharded_module = FSDP(my_module)
+optim = torch.optim.Adam(sharded_module.parameters(), lr=0.0001)
+for sample, label in dataload.next_batch:
+  out = sharded_module(x=sample, y=3, z=torch.Tensor([1]))
+  loss = criterion(out, label)
+  loss.backward()
+  optim.step()
+</code></pre>
+<p>FairScale中的FSDP库为大规模训练的许多重要方面提供了选项。当你希望使用FSDP的全部功能，你可以自行研究如下方面。</p>
+<ol>
+<li><strong>模型封装：</strong>为了最大限度地减少短期内的GPU内存需求，用户需要以嵌套方式封装模型。这增加了复杂性，但是在移植现有PyTorch模型代码时非常有用。</li>
+<li><strong>模型初始化：</strong>与DDP不同，FSDP<strong>不会</strong>在GPU工作进程之间自动同步模型权重。这意味着必须小心地进行模型初始化，以便所有GPU worker具有相同的初始权重。</li>
+<li><strong>优化器设置：</strong>由于分片和包装，FSDP只支持某些类型的优化器和优化器设置。特别是，如果模块被FSDP包装，并且其参数被展平为单个张量，则用户不能对此类模块中的不同参数组使用不同的超参数。</li>
+<li>**混合精度 **：FSDP支持FP16主权重的高级混合精度训练，以及在梯度上FP16类型的reduce和scatter。但是，模型的某些部分可能只有在使用全精度时才收敛，在这些情况下，需要额外的wrapping，以便有选择地以全精度运行模型的某些部分。</li>
+<li><strong>状态检查点和推断：</strong>当模型规模较大时，保存和加载模型状态可能会变得很困难。FSDP支持多种方法使该任务成为可能，但这些方法是有代价的。</li>
+<li>最后，FSDP通常与<strong>激活检查点</strong>函数一起使用，如<a href="https://github.com/facebookresearch/fairscale/blob/master/fairscale/nn/checkpoint/checkpoint_activations.py" target="_blank" rel="noopener nofollow">checkpoint_wrapper</a>  。用户可能需要仔细调整激活检查点策略，以便在有限GPU内存空间内容纳一个大型模型。</li>
+</ol>
+<h2 id="0x04-内存管理">0x04 内存管理</h2>
+<p>我们接下来看看FSDP如何管理内存。</p>
+<p>FairScale提供了受<code>ZeRO &lt;https://arxiv.org/pdf/1910.02054.pdf&gt;</code> 启发的算法：当使用数据并行训练时，您需要在计算/通信效率方面权衡内存的使用。另一方面，在使用模型并行训练时，需要为了内存而权衡计算/通信。</p>
+<p>模型训练的内存使用通常分为两类：</p>
+<ul>
+<li>
+<p>模型状态：优化器状态、梯度、参数。</p>
+</li>
+<li>
+<p>剩余状态：激活、临时缓冲区、碎片内存。</p>
+</li>
+</ul>
+<p>为了减少模型状态下的冗余，ZeRO提出了三种不同的算法。这些在FairScale中实现为优化器状态分片（Optimizer State Sharding，即OSS）、分片数据并行（Sharded Data Parallel，即SDP）和最终完全分片数据并行（Fully Sharded Data Parallel，即FSDP）。让我们深入了解每一个算法的实际机制，并理解它们为什么能够节省内存。</p>
+<h2 id="41-optimizer-state-sharding-oss">4.1 Optimizer State Sharding (OSS)</h2>
+<p>FairScale已经实现了与优化器内存相关的内存优化 OSS。</p>
+<p>像Adam这样的优化器通常需要保持动量、方差。即使可以使用FP16精度的参数和梯度进行训练，参数和梯度也需要保存为FP32精度。当每个rank更新完整模型时，这意味着相当大一部分内存被优化器状态的冗余表示所占用。</p>
+<p>为了克服这种冗余，优化器状态分片需要将模型优化步骤划分在不同的rank之间，以便每个rank只负责更新模型的对应分片。这反过来又确保优化器状态在每个rank上小得多，并且它不包含跨rank的冗余信息。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220117193458877-2038956082.png" alt="" loading="lazy"></p>
+<h4 id="411-训练流程">4.1.1 训练流程</h4>
+<p>训练流程可以从DDP的执行流程做如下修改：</p>
+<ol>
+<li>
+<p>wrapped optimizer根据参数大小（而不是使用顺序）以贪心算法方式来分割优化器状态。这是为了确保每个rank具有几乎相同的优化器内存占用。</p>
+</li>
+<li>
+<p>训练过程类似于PyTorch的分布式数据并行（DDP）的过程。在每个rank上完成前向传播，然后是向后传播。在后向传播过程中，使用allreduce同步梯度。</p>
+</li>
+<li>
+<p>每个rank只更新它负责的优化器分配状态参数，然后丢弃其余的。</p>
+</li>
+<li>
+<p>更新后，将执行broadcast或allgather操作，以确保所有rank都收到最新更新的参数值。</p>
+</li>
+</ol>
+<p>当您使用具有附加状态的优化器（如Adam）时，OSS非常有用。如果您使用的是SGD或任何内存占用有限的优化器，那么在使用多个节点时，由于步骤4中的额外通信，您可能会看到速度减慢。在第2步的allreduce过程中，也有一些用于存储梯度的浪费内存，这些内存随后被丢弃。</p>
+<h4 id="412-最佳实践">4.1.2 最佳实践</h4>
+<ul>
+<li>
+<p>OSS公开了一个broadcast_fp16 flag，您可能应该在多节点作业中使用它。在单节点实验中通常不需要这样做。</p>
+</li>
+<li>
+<p>如果您的模型在大小方面极不平衡（例如，存在一个巨大的张量），那么这种方法将不会有很大帮助，而张量切分选项，如'fairscale.nn.FullyShardedDataParallel'将更可取。</p>
+</li>
+<li>
+<p>3.OSS应该是DDP环境中的一个临时解决方案，其与大多数DDP功能保持兼容。</p>
+</li>
+</ul>
+<h4 id="413-性能">4.1.3 性能</h4>
+<ul>
+<li>
+<p>在单个节点上，OSS应该总是比vanilla PyTorch快，内存节省会因使用的优化器而异</p>
+</li>
+<li>
+<p>当使用多个节点时，OSS也可以比vanilla PyTorch快或慢，具体取决于所使用的优化器和可选标志（如上文提到的broadcast_fp16、梯度压缩、梯度累积）</p>
+</li>
+<li>
+<p>如果您的实验可以使用更大的batch size，则采取更大的batch size并减少所涉及的rank数通常是有益的，或者使用梯度累积，因为这样可以降低通信成本。</p>
+</li>
+</ul>
+<h2 id="42-optimizer--gradient-state-sharding">4.2 Optimizer + Gradient State Sharding</h2>
+<p>虽然OSS解决了优化器中的冗余问题，但依然存在梯度聚合计算的重复以及存在用于梯度的额外内存。为了克服冗余梯度内存，我们可以使用梯度分片或<code>ZeRO-2</code>。这已由FairScale中的分片数据并行（SDP）API实现。</p>
+<p>为了启用梯度分片，每个 rank 都被分配一组参数，它们负责管理优化器状态以及梯度聚合。通过将一个模型分片分配给一个给定的rank，我们确保梯度被规约到特定的rank，而这些rank又负责相应的更新。因此这减少了通信和内存使用。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220117193615695-1613617834.png" alt="" loading="lazy"></p>
+<h4 id="421-训练过程">4.2.1 训练过程</h4>
+<p>训练过程如下：</p>
+<ol>
+<li>
+<p>与之前一样，包装的优化器在不同的列组中分割参数。</p>
+</li>
+<li>
+<p>该模型现在使用分片数据并行（SDP）包装器进行包装，该包装器允许我们在训练过程中添加适当的hook并维护状态。</p>
+</li>
+<li>
+<p>SDP关注于可训练的参数，并为每个参数添加了一个反向hook。</p>
+</li>
+<li>
+<p>在反向传播过程中，梯度将规约到指定rank，rank是在 1 中作为切分过程的一部分指定的。使用reduce op代替allreduce op，从而减少通信开销。</p>
+</li>
+<li>
+<p>每个rank更新其负责的参数。</p>
+</li>
+<li>
+<p>更新后，将执行广播或allgather，以确保所有rank都收到最新更新的参数值。</p>
+</li>
+</ol>
+<p>OSS和SDPAPI都允许您减少用于梯度和优化器状态的内存，但是如果网络缓慢，则可能存在额外的通信成本。当遇到内存不足（OOM）问题时，可以把OSS和SDP作为第一步尝试。</p>
+<h4 id="422-最佳实践">4.2.2 最佳实践</h4>
+<ul>
+<li>
+<p>如果使用多个节点，请通过指定<code>reduce_buffer_size</code> 参数确保SDP正在使用reduce buffers。改变它们的大小可能是一个优化目标，最佳配置可能取决于互连状况。</p>
+</li>
+<li>
+<p>如果在单个节点上，通常最好不要使用'reduce_buffer_size'，因为它会带来延迟成本，但不会增加内存。将此值设置为0表示不使用此功能。</p>
+</li>
+<li>
+<p>如果您的实验可以使用更大的batch size，则采取更大的batch size并减少所涉及的rank数通常是有益的，或者使用梯度累积，因为这样可以降低通信成本。</p>
+</li>
+</ul>
+<h2 id="43-optimizer--gradient--horizontal-model-sharding">4.3 Optimizer + Gradient + Horizontal Model Sharding</h2>
+<p>为了进一步优化训练并实现更大的内存节省，我们需要启用参数切分。</p>
+<p>参数切分类似于梯度和优化器状态，即，每个数据并行rank负责模型参数的一个分片。FairScale通过完全分片数据并行（FSDP）API实现参数分片，该API深受 <code>ZeRO-3 &lt;https://arxiv.org/pdf/1910.02054.pdf&gt;</code>的启发。</p>
+<p>参数分片有两个如下关键点：</p>
+<ul>
+<li>
+<p>Allreduce操作可以分为reduce和allgather，类似于以前的分片技术（优化器状态和梯度）。</p>
+</li>
+<li>
+<p>可以使用FSDP API包装各个层，该API允许我们在给定实例中将单个层所需的所有参数引入给定GPU，计算前向传递，然后丢弃不属于该rank的参数。</p>
+</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220117193534614-390895419.png" alt="" loading="lazy"></p>
+<p>使用FSDP很简单，只需要在代码中简单地替换原来的DDP即可。注意：FSDP目前要求模型是一个<code>nn.Sequential</code>模型。</p>
+<pre><code class="language-python">from torch.utils.data.dataloader import DataLoader
+from torchvision.datasets import FakeData
+from torchvision.transforms import ToTensor
+
+from fairscale.experimental.nn.offload import OffloadModel
+
+num_inputs = 8
+num_outputs = 8
+num_hidden =  4
+num_layers =  2
+batch_size =  8
+
+transform = ToTensor()
+dataloader = DataLoader(
+    FakeData(
+        image_size=(1, num_inputs, num_inputs),
+        num_classes=num_outputs,
+        transform=transform,
+    ),
+    batch_size=batch_size,
+)
+
+model = torch.nn.Sequential(
+    torch.nn.Linear(num_inputs * num_inputs, num_hidden),
+    *([torch.nn.Linear(num_hidden, num_hidden) for _ in range(num_layers)]),
+    torch.nn.Linear(num_hidden, num_outputs),
+)
+</code></pre>
+<h4 id="431-训练过程">4.3.1 训练过程</h4>
+<p>具体训练过程如下：</p>
+<ul>
+<li>
+<p>在开始计算特定层之前，<code>allgather</code>模型每个层的正向传播所需的参数。</p>
+</li>
+<li>
+<p>计算向前计算。</p>
+</li>
+<li>
+<p>在特定层开始反向传递之前，<code>allgather</code>模型每个层反向传播所需的参数。</p>
+</li>
+<li>
+<p>计算向后传播。</p>
+</li>
+<li>
+<p>规约梯度，以便在负责相应参数的rank上累积聚合梯度。</p>
+</li>
+<li>
+<p>让每个rank使用聚合梯度更新已分配给它的参数。</p>
+</li>
+</ul>
+<p>有了FSDP，在使用API进行检查点设置和保存优化器状态时，需要做一些小的更改。鉴于优化器状态和参数的分片性质，任何旨在保存模型状态以供训练或推理的API都需要考虑保存所有worker的权重。FSDP实现所需的管道（required plumbing）以保存所有worker的权重、保存单个worker的权重以及保存所有worker的优化器状态。</p>
+<p>FSDP还支持混合精度训练，其中计算和通信均以FP16精度进行。如果要减少在FP32中执行的操作（这是DDP的默认行为），则必须设置 <code>fp32_reduce_scatter=True</code>。</p>
+<p>为了进一步节省内存，FSDP支持将当前未使用的参数和梯度卸载到CPU上。这可以通过将“move_params_to_cpu”和“move_grads_to_cpu”设置为True来启用。</p>
+<h4 id="432-最佳实践">4.3.2 最佳实践</h4>
+<ul>
+<li>
+<p>对于FSDP，最好使用 <code>model.zero_grad(set_to_none=True)</code> ，因为它在单步执行后节省了大量内存。</p>
+</li>
+<li>
+<p><code>torch.cuda.amp.autocast</code>与FSDP完全兼容。您需要将'mixed_precision'arg设置为True。</p>
+</li>
+<li>
+<p>如果与激活检查点相结合，则最好使用 FSDP(checkpoint_wrapper(module))而不是checkpoint_wrapper(FSDP(module)).。后者将导致更多的通信，速度也会变慢。</p>
+</li>
+<li>
+<p>FSDP与使用pointwise优化器的DDP兼容，例如Adam、AdamW、ADADDelta、Adamax、SGD等。当使用non-pointwise优化器（例如Adagrad、Adafactor、LAMB等）时，sharding将导致略有不同的结果。</p>
+</li>
+</ul>
+<h4 id="433-性能">4.3.3 性能</h4>
+<ul>
+<li>
+<p>为了获得最佳内存效率，请使用“auto_wrap”将网络中的每一层用FSDP进行封装，并将 <code>reshard_after_forward</code> 设置为True。这样速度会慢，但是显存开销最小。</p>
+</li>
+<li>
+<p>为了获得最佳训练速度，请将 <code>reshard_after_forward</code> 设置为False（不需要包装每一层，但如果设置，则会进一步提高速度）。</p>
+</li>
+</ul>
+<p>支持，FSDP基本原理和如何使用我们已经介绍完毕，下一篇我们介绍其代码细节，看看究竟如何做到最大程度减少内存使用。</p>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="https://engineering.fb.com/2021/07/15/open-source/fsdp/" target="_blank" rel="noopener nofollow">Fully Sharded Data Parallel: faster AI training with fewer GPUs</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/106783111" target="_blank" rel="noopener nofollow">ZeRO &amp; DeepSpeed：可以让训练模型拥有超过1000亿个参数的优化（微软）</a></p>
+<p><a href="https://link.zhihu.com/?target=https%3A//engineering.fb.com/2021/07/15/open-source/fsdp/" target="_blank" rel="noopener nofollow">Fully Sharded Data Parallel: faster AI training with fewer GPUs</a></p>
+<p><a href="https://link.zhihu.com/?target=https%3A//github.com/microsoft/DeepSpeed" target="_blank" rel="noopener nofollow">https://github.com/microsoft/DeepSpeed</a></p>
+<p><a href="https://link.zhihu.com/?target=https%3A//arxiv.org/pdf/1910.02054.pdf" target="_blank" rel="noopener nofollow">ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</a></p>
+<p><a href="https%3A//arxiv.org/pdf/2004.13336.pdf" target="_blank" rel="noopener nofollow">Automatic Cross-Replica Sharding of Weight Update in Data-Parallel Training</a></p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1207.8797957256852" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-01-17 19:47">2022-01-17 19:47</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">4413</span>)&nbsp;
+评论(<span id="post_comment_count">0</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15815013);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15815013', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15815013.html', title: '[源码分析] Facebook如何训练超大模型---(1)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15815013, cb_entryCreatedDate = '2022-01-17 19:47', cb_postType = 1, cb_postTitle = '[源码分析] Facebook如何训练超大模型---(1)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.trae.com.cn/?utm_source=advertising&amp;utm_medium=cnblogs_ug_cpa&amp;utm_term=hw_trae_cnblogs" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-trae')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202504/35695-20250422130943631-261509646.jpg" onload="countCreativeImpressions('C1-字节-trae')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDo3_sRKqwklquvbVhrkvr7smPxOBuJ-paQ2uhtNgbY4E7KVieHR-qZYfKiHKK47nmPyNdw9V81p8L1G6y9sFD4zE5NZnspIAYX7NbOQphtcnut2MrVSg9HPvUzm6QX-Pr4" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

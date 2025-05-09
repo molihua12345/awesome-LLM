@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型，之前文章之中我们谈到了FSDP支持混合精度训练，所以我们再来看看相关知识。" />
+    <meta property="og:description" content="FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型，之前文章之中我们谈到了FSDP支持混合精度训练，所以我们再来看看相关知识。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码分析] Facebook如何训练超大模型---(4) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15837845.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15837845.html",
+      "headline": "[源码分析] Facebook如何训练超大模型---(4)",
+      "description": "[源码分析] Facebook如何训练超大模型 (4) 0x00 摘要 我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。而FSDP（Fully Sharded Data",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-24T18:44:00.0000000&#x2B;08:00",
+      "dateModified": "2022-01-24T18:44:00.0000000&#x2B;08:00",
+      "wordCount": "23180",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15837845;
+            window.currentPostDateAdded = '2022-01-24 18:44';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15837845.html" title="发布于 2022-01-24 18:44">
+    <span role="heading" aria-level="2">[源码分析] Facebook如何训练超大模型---(4)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型，之前文章之中我们谈到了FSDP支持混合精度训练，所以我们再来看看相关知识。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码分析-facebook如何训练超大模型-----4">[源码分析] Facebook如何训练超大模型 --- (4)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码分析-facebook如何训练超大模型-----4" rel="noopener nofollow">[源码分析] Facebook如何训练超大模型 --- (4)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-背景知识" rel="noopener nofollow">0x01 背景知识</a><ul><li><a href="#11-单精度双精度和半精度浮点格式的区别" rel="noopener nofollow">1.1 单精度、双精度和半精度浮点格式的区别</a></li><li><a href="#12-多精度和混合精度计算的区别" rel="noopener nofollow">1.2 多精度和混合精度计算的区别</a></li><li><a href="#13--混合精度" rel="noopener nofollow">1.3  混合精度</a></li><li><a href="#14-训练过程" rel="noopener nofollow">1.4 训练过程</a></li></ul></li><li><a href="#0x02-pytorch" rel="noopener nofollow">0x02 PyTorch</a><ul><li><a href="#21-英伟达算力" rel="noopener nofollow">2.1 英伟达算力</a></li><li><a href="#22--torchcudaamp" rel="noopener nofollow">2.2  Torch.cuda.amp</a><ul><li><a href="#221-使用" rel="noopener nofollow">2.2.1 使用</a></li><li><a href="#222-多modellosses和优化器" rel="noopener nofollow">2.2.2 多Model，losses和优化器</a></li><li><a href="#223-分布式" rel="noopener nofollow">2.2.3 分布式</a></li></ul></li></ul></li><li><a href="#0x03-fsdp-使用" rel="noopener nofollow">0x03 FSDP 使用</a><ul><li><a href="#31-成员变量" rel="noopener nofollow">3.1 成员变量</a></li><li><a href="#32-scaler" rel="noopener nofollow">3.2 Scaler</a></li><li><a href="#33-初始化" rel="noopener nofollow">3.3 初始化</a></li><li><a href="#34-重建" rel="noopener nofollow">3.4 重建</a></li><li><a href="#35-cast操作" rel="noopener nofollow">3.5 cast操作</a></li><li><a href="#36-_post_reduction_hook" rel="noopener nofollow">3.6 _post_reduction_hook</a></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。而FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。Parameter sharding 就是把模型参数等切分到各个GPU之上。我们会以 Google，微软和 Facebook 的论文，博客以及代码来进行学习分析。</p>
+<p>之前文章之中我们谈到了FSDP支持混合精度训练，所以我们再来看看相关知识。</p>
+<p>本系列其他文章如下：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15782054.html" target="_blank">源码解析] PyTorch 分布式之 ZeroRedundancyOptimizer</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15785669.html" target="_blank">论文翻译] 分布式训练 Parameter sharding 之 ZeRO</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15795044.html" target="_blank">论文翻译] 分布式训练 Parameter Sharding 之 Google Weight Sharding</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15815013.html" target="_blank">源码分析] Facebook如何训练超大模型---(1)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15819817.html" target="_blank">源码分析] Facebook如何训练超大模型 --- (2)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15824699.html" target="_blank">源码分析] Facebook如何训练超大模型 --- (3)</a></p>
+<h2 id="0x01-背景知识">0x01 背景知识</h2>
+<h3 id="11-单精度双精度和半精度浮点格式的区别">1.1 单精度、双精度和半精度浮点格式的区别</h3>
+<p>我们从NVIDIA官博 <a href="https://blogs.nvidia.com/blog/2019/11/15/whats-the-difference-between-single-double-multi-and-mixed-precision-computing/" target="_blank" rel="noopener nofollow">What’s the Difference Between Single-, Double-, Multi- and Mixed-Precision Computing?</a>摘录如下：</p>
+<p>IEEE 浮点算术标准是在计算机上用二进制表示数字的通用约定。在双精度格式中，每个数字占用 64 位。单精度格式使用 32 位，而半精度只有 16 位。</p>
+<p>在传统的科学记数法中，pi 写为 3.14 x <span class="math inline">\(10^0\)</span>。但是计算机将这些信息以二进制形式存储为浮点数，即表示数字及其相应指数的一系列 1 和 0，在本例中为 1.1001001 x<span class="math inline">\(2^1\)</span>。</p>
+<p>在单精度 32 位格式中，一位用于判断数字是正数还是负数。为指数保留了八位，指数（因为它是二进制的）是 2 的某个幂。剩余的 23 位用于表示组成数字的数字，称为有效数。</p>
+<p>相反，双精度为指数保留 11 位，为有效数保留 52 位，大大扩展了它可以表示的数字的范围和大小。半精度占据了更小的部分，只有 5 个位用于指数，10 个位用于有效数。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220123232528090-1401415872.png" alt="" loading="lazy"></p>
+<p>以下是 pi 在每个精度级别的样子</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220123232547342-1639305258.png" alt="" loading="lazy"></p>
+<h3 id="12-多精度和混合精度计算的区别">1.2 多精度和混合精度计算的区别</h3>
+<p>多精度计算意味着使用能够以不同精度进行计算的处理器——在需要时使用双精度，并依赖于应用程序的其他部分的半精度或单精度算法。</p>
+<p>混合精度，也称为超精度，计算改为在单个操作中使用不同的精度级别，以在不牺牲精度的情况下实现计算效率。在混合精度中，计算从快速矩阵数学的半精度值开始。但是随着数字的计算，机器以更高的精度存储结果。例如，如果将两个 16 位矩阵相乘，则答案大小为 32 位。</p>
+<p>使用这种方法，当应用程序完成计算时，累积的答案在准确度上可与在双精度算术中运行整个事情相媲美。这种技术可以将传统双精度应用程序的速度提高多达 25 倍，同时减少运行它们所需的内存、运行时间和功耗。它可用于 AI 和模拟 HPC 工作负载。</p>
+<h3 id="13--混合精度">1.3  混合精度</h3>
+<p>采用FP16的优势如下：</p>
+<ul>
+<li>内存占用更少。如果采用FP16，则模型占用是FP32的一半，这样可以训练更大的模型，使用更大的batch size，通信量更少。</li>
+<li>计算更快。FP16的加速优化可以加快训练和推理的计算。</li>
+<li>另外，随着NVIDIA Tensor Core 的普及，FP6计算也越来越快。</li>
+</ul>
+<p>FP16的问题主要是其表示范围比FP32狭窄，所以会带来两个问题：溢出错误 和 舍入误差。因此，百度和NVIDIA联手在论文之中提出了一些技术。</p>
+<ul>
+<li>保留一份FP32格式的权重主备份。</li>
+<li>使用loss scale来避免梯度过小。</li>
+<li>使用FP16计算但是用FP32进行累加。</li>
+</ul>
+<p>比如，对于主备份，论文之中图例如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220123232605677-37398904.png" alt="" loading="lazy"></p>
+<h3 id="14-训练过程">1.4 训练过程</h3>
+<p>上面介绍的三种技术对于训练过程是一个良好的补充，我们从NVIDIA官方文档 <a href="https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html" target="_blank" rel="noopener nofollow">https://docs.nvidia.com/deeplearning/performance/mixed-precision-training/index.html</a> 摘录训练过程具体如下。</p>
+<ol>
+<li>维护一份FP32的参数主副本。</li>
+<li>对于每次迭代：
+<ol>
+<li>制作权重的FP16副本。</li>
+<li>使用FP16权重和激活进行向前传播。</li>
+<li>将得到的损失乘以比例因子S。</li>
+<li>使用FP16权重，激活和它们的梯度进行后向传播。</li>
+<li>将权重梯度乘以1/S。</li>
+<li>完成权重更新（包括gradient clipping等）。</li>
+</ol>
+</li>
+</ol>
+<p>一个更稳健的方法是动态地选择损失比例因子。其基本思想是以一个大的比例因子开始，然后在每次训练迭代中重新考虑它。如果在选定的迭代次数<em>N</em>中没有发生溢出，则增加比例因子。如果发生溢出，则跳过权重更新，降低比例因子。我们发现，只要不频繁地跳过更新，训练计划就不必调整，就可以达到与FP32训练相同的精度。</p>
+<p>请注意，<em>N</em>有效地限制了我们可以溢出和跳过更新的频率。缩放因子的更新率可以通过选择增加/减少的乘数以及<em>N</em>（增加前的非溢出迭代次数）来调整。</p>
+<p>动态损失缩放方法对应了了以下训练流程：</p>
+<ol>
+<li>在FP32中保持一份权重的主副本。</li>
+<li>将S初始化为一个大的数值。</li>
+<li>对于每个迭代
+<ol>
+<li>制作一个权重的FP16副本。</li>
+<li>前向传播（FP16权重和激活）。</li>
+<li>用比例因子S乘以所得的损失。</li>
+<li>后向传播（FP16权重、激活和它们的梯度）。</li>
+<li>如果权重梯度中存在Inf或NaN。
+<ol>
+<li>减少S。</li>
+<li>跳过权重更新，进入下一次迭代。</li>
+</ol>
+</li>
+<li>将权重梯度与1/S相乘。</li>
+<li>完成权重更新（包括梯度剪裁等）。</li>
+<li>如果在过去的N次迭代中没有出现Inf或NaN，则增加S。</li>
+</ol>
+</li>
+</ol>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220123232626226-323164213.png" alt="" loading="lazy"></p>
+<p>图片来自 <a href="https://developer.nvidia.com/automatic-mixed-precision" target="_blank" rel="noopener nofollow">https://developer.nvidia.com/automatic-mixed-precision</a></p>
+<h2 id="0x02-pytorch">0x02 PyTorch</h2>
+<h3 id="21-英伟达算力">2.1 英伟达算力</h3>
+<p>英伟达的Volta及Turing架构GPU在使用FP16计算时的特点如下：</p>
+<ul>
+<li>FP16的内存带宽和存储需求相比FP32来说可以降低一半，这样开发者在相同的硬件条件下可以使用更大更复杂的模型和更大的batch size。</li>
+<li>英伟达Volta和Turing架构GPU提供了Tensor Cores技术。Tensor Cores的FP16计算吞吐量是FP32的8倍。</li>
+</ul>
+<p>因此，在相同的超参数下，使用半精度浮点（FP16）和单精度（FP32）浮点的混合精度训练就可以达到与使用纯单精度（FP32）训练相同的准确率，而且模型训练速度可以大大加速。</p>
+<h3 id="22--torchcudaamp">2.2  Torch.cuda.amp</h3>
+<p>PyTorch之中的混合精度主要是依赖 torch.cuda.amp 这个库，这就说明这个功能是依赖于CUDA的。</p>
+<p>前面分析提到了为何要混合计算的原因，这是因为：</p>
+<ul>
+<li>在某些场合下对精度损失不敏感，局部精度损失对最终训练效果影响非常微弱，并且能利用Tensor Cores进行加速，此时FP16有优势。</li>
+<li>某些场合下对精度损失特别敏感，此时FP32有优势。</li>
+</ul>
+<p>PyTorch 之中，与混合精度相关的张量是torch.FloatTensor和torch.HalfTensor，这两个混合起来使用就是混合精度了。而框架会根据实际需要来自动（有时需要手动调整）调整一个张量的类型，在torch.FloatTensor和torch.HalfTensor 之中切换，这就是automatic mixed precision（AMP）的来由。</p>
+<h4 id="221-使用">2.2.1 使用</h4>
+<p>具体使用上，PyTorch 就是使用了autocast + GradScaler。我们从 <a href="https://github.com/NVIDIA/DeepLearningExamples" target="_blank" rel="noopener nofollow">https://github.com/NVIDIA/DeepLearningExamples</a> 官方例子找出来看看。</p>
+<p>GradScaler 的作用是放大loss，防止梯度underflow，但这只是在反向传播传递梯度时候使用，更新权重时候还需要把梯度缩放回原来的大小。</p>
+<p>autocast上下文应该只是包括前向传播和loss计算，因为反向传播会自动使用前向传播同样的类型。</p>
+<pre><code class="language-python">from torch.cuda.amp import autocast as autocast
+
+def do_train(
+    model,
+    data_loader,
+    optimizer,
+    scheduler,
+    checkpointer,
+    device,
+    checkpoint_period,
+    arguments,
+    use_amp,
+    cfg,
+    dllogger,
+    per_iter_end_callback_fn=None,
+):
+    # 模型默认的是torch.FloatTensor
+    max_iter = len(data_loader)
+    start_iter = arguments["iteration"]
+    model.train()
+
+    if use_amp:
+        # 构建GradScaler
+        scaler = torch.cuda.amp.GradScaler(init_scale=8192.0)
+    for iteration, (images, targets, _) in enumerate(data_loader, start_iter):
+        iteration = iteration + 1
+        images = images.to(device)
+        targets = [target.to(device) for target in targets]
+
+        if use_amp:
+            with torch.cuda.amp.autocast(): # 前向传播开启autocast
+                loss_dict = model(images, targets)
+        else:
+            loss_dict = model(images, targets)
+
+        losses = sum(loss for loss in loss_dict.values())
+
+        # reduce losses over all GPUs for logging purposes
+        loss_dict_reduced = reduce_loss_dict(loss_dict)
+        losses_reduced = sum(loss for loss in loss_dict_reduced.values())
+
+        # Note: If mixed precision is not used, this ends up doing nothing
+        # Otherwise apply loss scaling for mixed-precision recipe
+        if use_amp:        
+            scaler.scale(losses).backward() # 放大梯度
+        else:
+            losses.backward()
+
+        def _take_step():
+            if use_amp:
+                scaler.step(optimizer) # 在方法内部，如果梯度正常，则更新权重，否则忽略此次更新
+                scaler.update() # 是否需要增大scaler
+            else:
+                optimizer.step()
+            scheduler.step()
+            optimizer.zero_grad()
+        
+        if not cfg.SOLVER.ACCUMULATE_GRAD:
+            _take_step()
+        else:
+            if (iteration + 1) % cfg.SOLVER.ACCUMULATE_STEPS == 0:
+                for param in model.parameters():
+                    if param.grad is not None:
+                        param.grad.data.div_(cfg.SOLVER.ACCUMULATE_STEPS)
+                _take_step()
+</code></pre>
+<h4 id="222-多modellosses和优化器">2.2.2 多Model，losses和优化器</h4>
+<p>如果你的网络有多个损失，你必须在每个网络之中单独调用scaler.scale。如果网络有多个优化器，你可以在它们之中任意一个单独调用scaler.unscale，并且你必须在每个之中都单独调用scaler.step。</p>
+<p>但是，在迭代之中所有优化器都完成step操作之后，才可以调用 scaler.update，并且只能调用一次。</p>
+<p>每个优化器检查梯度是否为 infs/NaN，并独立决定是否跳过该步骤。这可能会导致一个优化器跳过该步骤，而另一个则没有。由于很少发生跳步（每几百次迭代可能才有一次），这不应妨碍收敛。</p>
+<pre><code class="language-python">scaler = torch.cuda.amp.GradScaler()
+
+for epoch in epochs:
+    for input, target in data:
+        optimizer0.zero_grad()
+        optimizer1.zero_grad()
+        with autocast():
+            output0 = model0(input)
+            output1 = model1(input)
+            loss0 = loss_fn(2 * output0 + 3 * output1, target)
+            loss1 = loss_fn(3 * output0 - 5 * output1, target)
+
+        # (retain_graph here is unrelated to amp, it's present because in this
+        # example, both backward() calls share some sections of graph.)
+        scaler.scale(loss0).backward(retain_graph=True)
+        scaler.scale(loss1).backward()
+
+        # You can choose which optimizers receive explicit unscaling, if you
+        # want to inspect or modify the gradients of the params they own.
+        scaler.unscale_(optimizer0)
+
+        scaler.step(optimizer0)
+        scaler.step(optimizer1)
+
+        scaler.update()
+</code></pre>
+<h4 id="223-分布式">2.2.3 分布式</h4>
+<p>torch.nn.DataParallel 在每个设备上产生一个线程来运行正向传递。autocast state 是线程本地的，因此以下内容将不起作用：</p>
+<pre><code class="language-python">model = MyModel()
+dp_model = nn.DataParallel(model)
+
+# Sets autocast in the main thread
+with autocast():
+    # dp_model's internal threads won't autocast.  The main thread's autocast state has no effect.
+    output = dp_model(input)
+    # loss_fn still autocasts, but it's too late...
+    loss = loss_fn(output)
+</code></pre>
+<p>修复很简单。在<code>MyModel.forward</code>之中使用 autocast。</p>
+<pre><code class="language-python">MyModel(nn.Module):
+    ...
+    @autocast()
+    def forward(self, input):
+       ...
+
+# Alternatively
+MyModel(nn.Module):
+    ...
+    def forward(self, input):
+        with autocast():
+            ...
+</code></pre>
+<p>以下代码在<code>dp_model</code>的线程（执行<code>forward</code>）和主线程（执行<code>loss_fn</code>）中自动转换：</p>
+<pre><code class="language-python">model = MyModel()
+dp_model = nn.DataParallel(model)
+
+with autocast():
+    output = dp_model(input)
+    loss = loss_fn(output)
+</code></pre>
+<p>torch.nn.parallel.DistributedDataParallel 的文档建议每个进程使用一个 GPU 以获得最佳性能。在这种情况下，<code>DistributedDataParallel</code>不会在内部产生线程，因此<code>autocast</code>和<code>GradScaler</code>的使用不受影响。</p>
+<p>或者在 forward 方法内部使用with autocast()，这样可以保证autocast在进程内部生效，比如。</p>
+<pre><code class="language-python">def _forward(self, sample):
+    loss = None
+    oom = 0
+    try:
+        if sample is not None:
+            with amp.autocast(enabled=self.args.amp):
+                # calculate loss and sample size
+                logits, _ = self.model(**sample['net_input'])
+                target = sample['target']
+                probs = F.log_softmax(logits, dim=-1, dtype=torch.float32)
+                loss = self.criterion(probs, target)
+    except RuntimeError as e:
+        if 'out of memory' in str(e):
+            print('| WARNING: ran out of memory in worker {}, skipping batch'.format(
+                self.args.distributed_rank), force=True)
+            oom = 1
+            loss = None
+        else:
+            raise e
+    return loss, oom
+</code></pre>
+<h2 id="0x03-fsdp-使用">0x03 FSDP 使用</h2>
+<p>torch.cuda.amp.autocast 与FSDP完全兼容，但是用户需要把<code>mixed_precision</code> 设置为True，具体示例代码如下：</p>
+<pre><code class="language-python">offload_model = OffloadModel(
+    model=model,
+    device=torch.device("cuda"),
+    offload_device=torch.device("cpu"),
+    num_slices=3,
+    checkpoint_activation=True,
+    num_microbatches=1,
+)
+
+torch.cuda.set_device(0)
+device = torch.device("cuda")
+
+criterion = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(offload_model.parameters(), lr=0.001)
+
+# To train 1 epoch.
+offload_model.train()
+for batch_inputs, batch_outputs in dataloader:
+    batch_inputs, batch_outputs = batch_inputs.to("cuda"), batch_outputs.to("cuda")
+    start = time.time_ns()
+    optimizer.zero_grad()
+    inputs = batch_inputs.reshape(-1, num_inputs * num_inputs)
+    
+    with torch.cuda.amp.autocast(): # 设定使用 amp
+        output = model(inputs)
+        loss = criterion(output, target=batch_outputs)
+        loss.backward()
+    optimizer.step()
+</code></pre>
+<p>我们接下来看看FSDP的相关源码，</p>
+<h3 id="31-成员变量">3.1 成员变量</h3>
+<p>因为涉及了 CPU offload 和分区等因素，所以FSDP不能简单使用amp，需要和 CPU offload 和分区结合起来看，比如<u>FP16参数也需要分区和offload，因为amp不会自动分区和offload，所以FSDP需要把这部分活承担过来，显式的进行部分切换工作</u>。</p>
+<p>前文代码提到了一些与混合精度训练相关的成员变量，<u>这里就是把32,16位参数分别进行分区操作，也会相应做offload操作</u>。</p>
+<ul>
+<li><code>_fp32_shard</code>：full precision的单个参数分片（通常为fp32，但这取决于用户传入的模型数据类型）。这可以在CPU或GPU上进行，具体取决于<em><code>cpu_offload</code></em>的值。</li>
+<li><code>_fp16_shard</code>：在混合精度模式下，我们在计算设备上维护一个降低精度（通常是FP16）的参数分片，<strong>用于在前向/后向传递中执行计算</strong>。这就是``_fp16_shard<code>，如果 </code>mixed_precision<code>为</code>True`，这将是fp16中参数的单个shard，用于all-gather。</li>
+<li><code>_full_param_padded</code>：在向前和向后传播中用于计算的全部权重（被填充为可被<code>world_size</code>均匀整除）。这将原地调整大小，并仅在需要时具体化（通过all-gather）。</li>
+</ul>
+<p>代码之中也需要做相应设置，如果我们计划将FP32/FP16参数保留在CPU上，那么固定内存允许我们以后在将FP32/FP16参数碎片移动到计算设备时使用非阻塞传输。<u>分区操作是 FP32，FP16 统一处理的。</u></p>
+<h3 id="32-scaler">3.2 Scaler</h3>
+<p>在 Scaler 方法，FSDP也推出了有特色的 ShardedGradScaler。PyTorch自动混合精度的实际使用情况将取决于OSS是与DDP还是与ShardedDDP一起使用。</p>
+<ul>
+<li>如果OSS与DDP一起使用，那么就可以使用正常的PyTorch GradScaler，不需要做任何改变。</li>
+<li>如果OSS与ShardedDDP一起使用（为了获得梯度分片），那么可以使用一个非常类似的流程，但它需要一个感知梯度的GradScaler。它可以在<code>fairscale.optim.grad_scaler</code>中使用。</li>
+</ul>
+<p>在这两种情况下，Autocast都可以照常使用，并且损失将以同样的方式被缩放和处理。</p>
+<p>我们看看ShardedGradScaler代码，会发现其特色在于使用 dist.all_reduce 在 ranks 之间进行规约。</p>
+<pre><code class="language-python">import torch
+from torch.cuda.amp import GradScaler as TorchGradScaler
+import torch.distributed as dist
+from torch.optim import Optimizer
+
+from .oss import OSS
+
+
+class GradScaler(TorchGradScaler):
+    def _unscale_grads_(
+        self, optimizer: Optimizer, inv_scale: torch.Tensor, found_inf: torch.Tensor, allow_fp16: bool
+    ) -&gt; Dict[torch.device, torch.Tensor]:
+        return super()._unscale_grads_(optimizer, inv_scale, found_inf, True)
+
+
+class ShardedGradScaler(TorchGradScaler):
+    """
+    A shard-aware :class:`GradScaler&lt;torch.cuda.amp.GradScaler&gt;`, to be used in conjunction with
+    :class:`OSS` and :class:`ShardedOptimizer`.
+
+    Interface and usecases are not changed, more explanations can be found in the corresponding pytorch
+    documentation https://pytorch.org/docs/stable/amp.html#torch.cuda.amp.GradScaler
+    """
+
+    def __init__(
+        self,
+        init_scale: float = 2.0 ** 16,
+        growth_factor: float = 2.0,
+        backoff_factor: float = 0.5,
+        growth_interval: int = 2000,
+        enabled: bool = True,
+        process_group: Any = dist.group.WORLD,
+    ) -&gt; None:
+        super().__init__(
+            init_scale=init_scale,
+            growth_factor=growth_factor,
+            backoff_factor=backoff_factor,
+            growth_interval=growth_interval,
+            enabled=enabled,
+        )
+        self.display_warning = True
+        self.group = process_group
+
+    def unscale_(self, optimizer: Optimizer) -&gt; None:
+        # Could be a mistake, this scaler is supposed to work with ZeroRedundancyOptimizer only
+        if self.display_warning and not isinstance(optimizer, OSS):
+            logging.warning(
+                "ShardedGradScaler is to be used in combination with a sharded optimizer, this could not be checked"
+            )
+        self.display_warning = False  # Only warn once
+
+        # Call the upstream unscale_ method which will only act on this rank's gradients
+        super().unscale_(optimizer)
+
+        # Synchronize the detected inf across the ranks
+        optimizer_state = self._per_optimizer_states[id(optimizer)]
+        last_handle = None
+        
+        # 使用了 AllReduce
+        for v in optimizer_state["found_inf_per_device"].values():
+            last_handle = dist.all_reduce(v, async_op=True, group=self.group)
+
+        # Make sure that the calls are done before moving out.
+        # The calls are executed in sequence, waiting for the last one is enough
+        if last_handle is not None:
+            last_handle.wait()
+</code></pre>
+<h3 id="33-初始化">3.3 初始化</h3>
+<p>我们接着看看 offload 和混合精度如何使用。在初始化方法 _init_param_attributes 之中，也有操作会为移动到CPU做准备，比如放到锁页内存之中，也会为混合精度创建张量，比如_fp16_shard。</p>
+<pre><code class="language-python">@torch.no_grad()
+def _init_param_attributes(self, p: Parameter) -&gt; None:
+
+    if hasattr(p, "_fp32_shard"):
+        return
+
+    # A single shard of the parameters in full precision.
+    p._fp32_shard = p.data
+
+    if self.mixed_precision:
+
+        # 为移动到CPU做准备
+        if self.move_params_to_cpu:
+            # If we plan to keep the FP32 parameters on CPU, then pinning
+            # memory allows us to later use non-blocking transfers when moving
+            # the FP32 param shard to compute_device.
+            p._fp32_shard = p._fp32_shard.pin_memory() 
+            p.data = p._fp32_shard
+
+        # 在混合精度模式下，我们在计算设备上维护一个降低精度（通常是FP16）的参数分片，
+        # 用于在前向/后向传递中执行计算。    
+            
+        # In mixed precision mode, we maintain a reduced precision
+        # (typically FP16) parameter shard on compute_device for performing
+        # the computation in the forward/backward pass. We resize the
+        # storage to size 0 at init (here) and re-materialize (by copying
+        # from _fp32_shard) as needed.
+        p._fp16_shard = torch.zeros_like(p._fp32_shard, device=self.compute_device, dtype=self.compute_dtype)
+        free_storage_(p._fp16_shard)
+    else:
+        p._fp16_shard = None  # use _fp32_shard
+
+    # We also maintain a full-sized parameter of type self.compute_dtype
+    # (FP16 for mixed_precision or FP32 otherwise). We resize the
+    # storage to size 0 at init (here) and only materialize as needed. The
+    # storage may contain padding elements so that it is evenly divisible by
+    # world_size, although these padding elements will be removed before the
+    # relevant computation.
+    if p._is_sharded:
+        p._full_param_padded = torch.zeros(
+            p.data.numel() * self.world_size, device=self.compute_device, dtype=self.compute_dtype
+        )
+        free_storage_(p._full_param_padded)
+
+    # 为移动到CPU做准备     
+        
+    if self.move_grads_to_cpu: 
+        # We can optionally move the grad shard to CPU during the backward
+        # pass. In this case, it's important to pre-allocate the CPU grad
+        # shard in pinned memory so that we can do a non-blocking transfer.
+        p._cpu_grad = torch.zeros_like(p.data, device="cpu").pin_memory()
+</code></pre>
+<p>逻辑如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220124183855096-1625669293.jpg" alt="" loading="lazy"></p>
+<h3 id="34-重建">3.4 重建</h3>
+<p>我们以 _rebuild_full_params 为例。因为前面分析过，这里只是把相关代码摘录，代码会依据各种配置进行切换，比如如果指定了强制全精度，则还需要从FP16转换为FP32，然后再进行all-gather。</p>
+<pre><code class="language-python">@torch.no_grad()
+def _rebuild_full_params(self, force_full_precision: bool = False) -&gt; Optional[List[Tuple[torch.Tensor, bool]]]:
+
+    output_tensors: List[Tuple[torch.Tensor, bool]] = []
+
+    def update_p_data(custom_output_tensor: Optional[torch.Tensor] = None) -&gt; None:
+        """
+        Helper function to update p.data pointer.
+        """
+        if custom_output_tensor is not None:
+             # 省略
+        elif not p._is_sharded:
+            if self.mixed_precision and not force_full_precision: # 切换到 FP16
+                p.data = p._fp16_shard
+                output_tensors.append((p.data, True))
+            else:
+                # Here p.data == p._fp32_shard, so it's not safe to free.
+                output_tensors.append((p.data, False))
+        else:
+            # 省略
+        # Trim any padding and reshape to match original size.
+        p.data = p.data[: p._orig_size.numel()].view(p._orig_size)
+
+
+    with torch.cuda.stream(self._streams["all_gather"]):
+      
+        if self.mixed_precision and not force_full_precision:
+            self._cast_fp32_param_shards_to_fp16() # 从fp32切换到fp16
+
+        for p in self.params:
+            if not p._is_sharded:  # e.g., when world_size == 1
+                update_p_data()
+            else:
+                # If self.move_params_to_cpu and force_full_precision, we need to cast
+                # the FP32 CPU param to CUDA for the all-gather.
+                
+                # 拷贝到GPU
+                p_data = p.data.to(p._full_param_padded.device, non_blocking=True)
+
+                p_size = p._full_param_padded.size()
+                if self.mixed_precision and force_full_precision:
+                    # Allocate fresh tensor in full precision since we are in
+                    # mixed precision and full precision rebuild is asked.
+                    
+                    # 在全精度中分配新的张量，因为我们处于混合精度中，需要进行全精度重建。
+                    output_tensor = p_data.new_zeros(p_size)
+                else:
+                    if p._full_param_padded.storage().size() != p_size.numel():
+                        alloc_storage_(p._full_param_padded, size=p_size)
+                    output_tensor = p._full_param_padded
+
+                # Fill output_tensor with (p.data for each shard in self.world_size)
+                dist.all_gather(chunks, p_data, group=self.process_group) # 简化版本代码
+
+                if self.mixed_precision and not force_full_precision:
+                    self._free_fp16_param_shard([p]) # 释放内存
+                    
+                # 省略    
+</code></pre>
+<p>逻辑如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220124183842425-538888546.jpg" alt="" loading="lazy"></p>
+<h3 id="35-cast操作">3.5 cast操作</h3>
+<p>可以从 _cast_fp32_param_shards_to_fp16 之中看到如何做转换操作。</p>
+<pre><code class="language-python">@torch.no_grad()
+def _cast_fp32_param_shards_to_fp16(self, params: Optional[List[Parameter]] = None) -&gt; None:
+    """Cast FP32 param shard to FP16 for a list of params."""
+    if params is None:
+        params = self.params
+    with torch.cuda.stream(self._streams["fp32_to_fp16"]):
+        for p in params:
+            alloc_storage_(p._fp16_shard, size=p._fp32_shard.size())
+            p._fp16_shard.copy_(
+                # If cpu_offload is True, this will be non-blocking because
+                # _fp32_shard is pinned, otherwise it's a no-op.
+                p._fp32_shard.to(p._fp16_shard.device, non_blocking=True)
+            )
+            p.data = p._fp16_shard
+    torch.cuda.current_stream().wait_stream(self._streams["fp32_to_fp16"])
+</code></pre>
+<h3 id="36-_post_reduction_hook">3.6 _post_reduction_hook</h3>
+<p>在 <code>_post_backward_hook</code> 之中会设置 <code>callback_fn</code>，就是在 <code>reduce-scatter</code> 之后调用<code>_post_reduction_hook</code>，可以理解，就是做完这个操作之后，可以把梯度移动到CPU了。</p>
+<pre><code class="language-python">callback_fn = functools.partial(self._post_reduction_hook, param)
+</code></pre>
+<p>具体代码如下，和offload相关的是把梯度移动到CPU的操作，<u>和混合精度相关的是把梯度转换为参数张量的类型</u>。</p>
+<pre><code class="language-python">def _post_reduction_hook(self, param: Parameter, reduced_grad: torch.Tensor) -&gt; None:
+    """Hook to call on each param after the reduce-scatter."""
+
+    param.grad.data = reduced_grad
+    if self.gradient_postdivide_factor &gt; 1:
+        # Average grad by world_size for consistency with PyTorch DDP.
+        param.grad.data.div_(self.gradient_postdivide_factor)
+        
+    # Cast grad to param's dtype (typically FP32). Note: we do this
+    # before the move_grads_to_cpu step so that this entire hook remains
+    # non-blocking. The downside is a bit more D2H transfer in that case.
+    if self.mixed_precision:
+        orig_param_grad_data = param.grad.data # 把梯度进行转换，一般来说是切换回 FP32
+        param.grad.data = param.grad.data.to(dtype=param.data.dtype)
+        # Don't let this memory get reused until after the transfer.
+        orig_param_grad_data.record_stream(torch.cuda.current_stream())
+        
+    if hasattr(param, "_saved_grad_shard") and param._saved_grad_shard is not None:
+        param.grad.data += param._saved_grad_shard
+        delattr(param, "_saved_grad_shard")
+        
+    # Optionally move gradients to CPU, typically used if one is running
+    # the optimizer on the CPU.
+    if self.move_grads_to_cpu: # 把梯度移动到CPU
+        param._cpu_grad.copy_(param.grad.data, non_blocking=True)
+        # Don't let this memory get reused until after the transfer.
+        param.grad.data.record_stream(torch.cuda.current_stream())
+        param.grad.data = param._cpu_grad
+</code></pre>
+<p>至此，混合精度分析完毕，我们下一篇看看 FSDP 如何使用 Activation recomputation，敬请期待。</p>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="https://pytorch.org/docs/stable/notes/amp_examples.html#working-with-multiple-models-losses-and-optimizers" target="_blank" rel="noopener nofollow">https://pytorch.org/docs/stable/notes/amp_examples.html#working-with-multiple-models-losses-and-optimizers</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/165152789" target="_blank" rel="noopener nofollow">PyTorch的自动混合精度（AMP）</a></p>
+<p><a href="https://www.paddlepaddle.org.cn/documentation/docs/en/advanced_guide/performance_improving/amp/amp.html#gpu" target="_blank" rel="noopener nofollow">混合精度训练最佳实践</a></p>
+<p><a href="https://arxiv.org/pdf/2101.06840.pdf" target="_blank" rel="noopener nofollow">ZeRO-Offload: Democratizing Billion-Scale Model Training</a></p>
+<p><a href="https://www.deepspeed.ai/tutorials/zero-offload/" target="_blank" rel="noopener nofollow">https://www.deepspeed.ai/tutorials/zero-offload/</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/deepspeed-extreme-scale-model-training-for-everyone/" target="_blank" rel="noopener nofollow">DeepSpeed: Extreme-scale model training for everyone</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/zero-infinity-and-deepspeed-unlocking-unprecedented-model-scale-for-deep-learning-training/" target="_blank" rel="noopener nofollow">https://www.microsoft.com/en-us/research/blog/zero-infinity-and-deepspeed-unlocking-unprecedented-model-scale-for-deep-learning-training/</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/zero-2-deepspeed-shattering-barriers-of-deep-learning-speed-scale/" target="_blank" rel="noopener nofollow">https://www.microsoft.com/en-us/research/blog/zero-2-deepspeed-shattering-barriers-of-deep-learning-speed-scale/</a></p>
+<p><a href="https://www.marktechpost.com/2021/02/01/microsoft-and-the-university-of-california-merced-introduces-zero-offload-a-novel-heterogeneous-deeplearning-training-technology-to-train-multi-billion-parameter-models-on-a-single-gpu/" target="_blank" rel="noopener nofollow">https://www.marktechpost.com/2021/02/01/microsoft-and-the-university-of-california-merced-introduces-zero-offload-a-novel-heterogeneous-deeplearning-training-technology-to-train-multi-billion-parameter-models-on-a-single-gpu/</a></p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1200.923472927279" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-01-24 18:44">2022-01-24 18:44</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">1433</span>)&nbsp;
+评论(<span id="post_comment_count">3</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15837845);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15837845', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15837845.html', title: '[源码分析] Facebook如何训练超大模型---(4)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15837845, cb_entryCreatedDate = '2022-01-24 18:44', cb_postType = 1, cb_postTitle = '[源码分析] Facebook如何训练超大模型---(4)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://cnblogs.vip/store" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-tshirt')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202504/35695-20250419101710221-1948927053.jpg" onload="countCreativeImpressions('C1-tshirt')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDqiJRN9sMZCb2SUthK66_wwkk78pFUJNN5WCo_iZqy3OTZlRCypBlNMjTphXfFWKRR5IDgZdk_r4Qv8cSCXga7SdwIBtJkJGyIlmLXCx88-fWz5VvUvo5Rf8DIM7ndUcWA" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

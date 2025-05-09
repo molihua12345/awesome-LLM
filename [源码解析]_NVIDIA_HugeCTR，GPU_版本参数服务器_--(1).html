@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="本系列之中我们将会介绍 NVIDIA 出品的 HugeCTR，这是一个面向行业的推荐系统训练框架，针对具有模型并行嵌入和数据并行密集网络的大规模 CTR 模型进行了优化。" />
+    <meta property="og:description" content="本系列之中我们将会介绍 NVIDIA 出品的 HugeCTR，这是一个面向行业的推荐系统训练框架，针对具有模型并行嵌入和数据并行密集网络的大规模 CTR 模型进行了优化。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码解析] NVIDIA HugeCTR，GPU 版本参数服务器 --(1) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15897877.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15897877.html",
+      "headline": "[源码解析] NVIDIA HugeCTR，GPU 版本参数服务器 --(1)",
+      "description": "[源码解析] NVIDIA HugeCTR，GPU版本参数服务器 --(1) 0x00 摘要 本系列之中我们将会介绍 NVIDIA 出品的 HugeCTR，这是一个面向行业的推荐系统训练框架，针对具有模型并行嵌入和数据并行密集网络的大规模 CTR 模型进行了优化。 本文以Introducing NV",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-02-15T19:29:00.0000000&#x2B;08:00",
+      "dateModified": "2022-02-15T19:29:00.0000000&#x2B;08:00",
+      "wordCount": "13554",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15897877;
+            window.currentPostDateAdded = '2022-02-15 19:29';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15897877.html" title="发布于 2022-02-15 19:29">
+    <span role="heading" aria-level="2">[源码解析] NVIDIA HugeCTR，GPU 版本参数服务器 --(1)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        本系列之中我们将会介绍 NVIDIA 出品的 HugeCTR，这是一个面向行业的推荐系统训练框架，针对具有模型并行嵌入和数据并行密集网络的大规模 CTR 模型进行了优化。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码解析-nvidia-hugectrgpu版本参数服务器---1">[源码解析] NVIDIA HugeCTR，GPU版本参数服务器 --(1)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码解析-nvidia-hugectrgpu版本参数服务器---1" rel="noopener nofollow">[源码解析] NVIDIA HugeCTR，GPU版本参数服务器 --(1)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-背景" rel="noopener nofollow">0x01 背景</a><ul><li><a href="#11-推荐系统中的点击率估计" rel="noopener nofollow">1.1 推荐系统中的点击率估计</a></li><li><a href="#12-点击率估算训练的挑战" rel="noopener nofollow">1.2 点击率估算训练的挑战</a></li></ul></li><li><a href="#0x02-hugectr" rel="noopener nofollow">0x02 HugeCtr</a></li><li><a href="#0x03-架构" rel="noopener nofollow">0x03 架构</a><ul><li><a href="#31-ctr-dl-模型" rel="noopener nofollow">3.1 CTR DL 模型</a></li><li><a href="#32-hugectr-架构" rel="noopener nofollow">3.2 HugeCTR 架构</a></li><li><a href="#33-基于gpu的参数服务器" rel="noopener nofollow">3.3 基于GPU的参数服务器</a></li></ul></li><li><a href="#0x04-核心功能" rel="noopener nofollow">0x04 核心功能</a><ul><li><a href="#41-模型并行训练" rel="noopener nofollow">4.1 模型并行训练</a><ul><li><a href="#411-in-memory-gpu-hash-table" rel="noopener nofollow">4.1.1 in-memory GPU hash table</a></li><li><a href="#412-multi-slot-embedding" rel="noopener nofollow">4.1.2 Multi-slot embedding</a></li><li><a href="#413-具体实现" rel="noopener nofollow">4.1.3 具体实现</a></li></ul></li><li><a href="#42-多节点训练" rel="noopener nofollow">4.2 多节点训练</a></li><li><a href="#43-混合精度训练" rel="noopener nofollow">4.3 混合精度训练</a></li><li><a href="#44-sgd-优化器和学习率调度" rel="noopener nofollow">4.4 SGD 优化器和学习率调度</a></li><li><a href="#45-嵌入训练缓存" rel="noopener nofollow">4.5 嵌入训练缓存</a></li><li><a href="#46-hugectr-到-onnx-转换器" rel="noopener nofollow">4.6 HugeCTR 到 ONNX 转换器</a></li><li><a href="#47-分层参数服务器" rel="noopener nofollow">4.7 分层参数服务器</a></li><li><a href="#48-异步多线程数据管道" rel="noopener nofollow">4.8 异步多线程数据管道</a></li><li><a href="#49-灵活模型配置" rel="noopener nofollow">4.9 灵活模型配置</a></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>本系列之中我们将会介绍 NVIDIA 出品的 HugeCTR，这是一个面向行业的推荐系统训练框架，针对具有模型并行嵌入和数据并行密集网络的大规模 CTR 模型进行了优化。</p>
+<p>本文以<a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a>，GitHub 源码文档 <a href="https://github.com/NVIDIA-Merlin/HugeCTR" target="_blank" rel="noopener nofollow">https://github.com/NVIDIA-Merlin/HugeCTR</a> 的翻译为基础，并且结合源码进行分析。</p>
+<p>其中借鉴了<a href="https://blog.csdn.net/weixin_42717258/article/details/115643706" target="_blank" rel="noopener nofollow">HugeCTR源码阅读</a> 这篇大作，特此感谢，期望能在此篇大作基础之上，再丰富一下对HugeCTR的理解。</p>
+<h2 id="0x01-背景">0x01 背景</h2>
+<p>我们将简要讨论 CTR 估计在现代推荐系统中的作用及其训练中的主要挑战。</p>
+<h3 id="11-推荐系统中的点击率估计">1.1 推荐系统中的点击率估计</h3>
+<p>从在线广告和电子商务到流媒体服务，推荐系统无处不在，同时对服务提供商的收入产生巨大影响。推荐系统找到给定用户最可点击的项目，然后对它们进行排名并向用户显示前 <em>N 个</em>项目。为了实现这个目标，推荐系统首先必须估计特定用户点击项目的可能性。此任务通常称为 CTR 估计。</p>
+<p>如何估算点击率？这里没有巫术，一般是获取包含 用户-物品 交互的富数据集，并使用它来训练 ML 模型。数据集中的每条记录都可以包含来自用户（年龄、工作），商品（类型、价格）和用户商品点击（0 或 1）的特征。例如，如果用户 A 从一系列书籍中购买或点击了几本传记，那么模型为传记分配高概率值是有意义的。</p>
+<p>CTR 的系统结构大致如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191615172-1662109787.png" alt="" loading="lazy"></p>
+<p>下图展示了CTR推理流程。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191626678-41340256.png" alt="" loading="lazy"></p>
+<p>图来自<a href="https://www.nvidia.cn/content/dam/en-zz/zh_cn/assets/webinars/nov19/HugeCTR_Webinar_1.pdf" target="_blank" rel="noopener nofollow">HugeCTR_Webinar</a></p>
+<h3 id="12-点击率估算训练的挑战">1.2 点击率估算训练的挑战</h3>
+<p>首先，推荐系统之中的特征有如下性质：高维，稀疏。大规模推荐系统会面临用户和物品的频繁变化，因此识别用户点击背后的隐式特征交互至关重要，这样推荐系统可以提供更高质量的更通用的推荐。例如，30 岁以下的已婚人士和孩子未满 2 岁的人可能倾向于购买高 ABV 的啤酒。对这些隐式特征交互进行建模需要领域专家进行复杂的特征工程。更糟糕的是，由于特征极其复杂且不直观，即使是人类专家也常常无法发现这些交互。为了代替这种对专家的依赖，人们研究出了一些基于深度学习的方法，例如 Wide &amp; Deep，DeepFM 和 DLRM，这些模型可以捕获这些复杂的交互。</p>
+<p>训练 CTR 估计模型的另一个挑战是用户和物品几乎每天都在变化，因此训练出来的模型其生命周期可能很短。此外，由于数据集的大小的增加，维数和稀疏性因素，CTR 模型通常包含一个很大的嵌入表，其可能无法放入单个 GPU 甚至多个 GPU 的节点中。因此，数据加载，嵌入表查找和 GPU 间通信可以占据模型训练时间的很大一部分。</p>
+<p>这些因素，再加上缺乏用于 CTR 估算的标准化建模方法，通常导致服务在吞吐量和延迟方面经常只能达到次优性能。所以在单个或多个 GPU 上完成模型的更快迭代训练是非常重要的。</p>
+<h2 id="0x02-hugectr">0x02 HugeCtr</h2>
+<p>HugeCTR 是一个开源框架，用于在 NVIDIA GPU 上加速 CTR 估计模型的训练，并针对 NVIDIA GPU 的性能进行了高度优化，同时允许用户以 JSON 格式自定义模型。它是用 CUDA C++ 编写的，并且高度利用了 GPU 加速库，例如<a href="https://developer.nvidia.com/cublas" target="_blank" rel="noopener nofollow">cuBLAS</a>、<a href="https://developer.nvidia.com/cudnn" target="_blank" rel="noopener nofollow">cuDNN</a>和<a href="https://developer.nvidia.com/nccl" target="_blank" rel="noopener nofollow">NCCL</a>。它最初是作为内部原型来评估 GPU 在 CTR 估计问题上的潜力，但是其很快成为基于 GPU 的推荐系统的参考设计。由于它自然而然地成为了专用于 CTR 估算的更通用的框架，因此 NVIDIA 于 2019 年 9 月开源了其初始版本，以接受外部反馈，同时与一些客户保持互动。</p>
+<p>HugeCTR 也是 NVIDIA <a href="https://developer.nvidia.com/nvidia-merlin" target="_blank" rel="noopener nofollow">Merlin</a>的支柱，这是一个框架和生态系统，用于构建需要大量数据集进行训练的大规模推荐系统，旨在促进推荐系统开发的所有阶段，并在 NVIDIA GPU 上加速。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191655756-1431785404.png" alt="" loading="lazy"></p>
+<p>图来自源码 <a href="https://github.com/NVIDIA-Merlin/Merlin" target="_blank" rel="noopener nofollow">https://github.com/NVIDIA-Merlin/Merlin</a></p>
+<p>HugeCTR 在单个 NVIDIA V100 GPU 上的速度比 TensorFlow 在 40 核 CPU 节点上提高了 114 倍，在同一个 V100 GPU 上实现了 TensorFlow 的 8.3 倍提高。由于由线性模型和深度模型组成的混合模型已变得普遍，因此 HugeCTR 架构 2.1 版扩展为支持 Wide &amp; Deep、DCN 和 DeepFM 等模型。更新包括新的数据读取器，它可以同时读取连续和分类输入数据；以及新的层，包括因子分解机和交叉层。为了实现更灵活的设计空间探索，还添加了 Dropout、L1/L2 正则化器等。</p>
+<h2 id="0x03-架构">0x03 架构</h2>
+<h3 id="31-ctr-dl-模型">3.1 CTR DL 模型</h3>
+<p>下图描绘了用于 CTR 估计的 DL 模型的步骤：</p>
+<ol>
+<li>按批次读取数据记录，每个记录都由高维、极其稀疏（或 categorical 类型）的特征组成。每个记录还可以包含密集的数字特征，这些特征可以直接馈送到全连接层。</li>
+<li>使用嵌入层将输入稀疏特征压缩为低维密集嵌入向量。例如，如果有 <em>N 个</em>稀疏特征，嵌入维度为 <em>K</em>，则嵌入表生成 <em>N</em> 个 <em>K</em> 维密集向量。</li>
+<li>使用前馈神经网络来估计点击率。</li>
+</ol>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191715781-283510233.png" alt="" loading="lazy"></p>
+<p>图上显示了一个典型的 CTR 模型，包括数据读取器、嵌入和全连接层。 图来自<a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a></p>
+<h3 id="32-hugectr-架构">3.2 HugeCTR 架构</h3>
+<p>HugeCTR 不仅支持 CTR DL 所有三个步骤，而且还增强了端到端的性能，比如：</p>
+<ul>
+<li>为了防止数据加载成为训练中的主要瓶颈，它实现了一个专用的数据读取器，该读取器是异步和多线程的。它将读取一组批处理数据记录，其中每条记录都由高维、极度稀疏或分类特征（categorical features）组成。每个记录还可以包含密集的数字特征（dense numerical features），这些特征可以直接馈送到全连接层。</li>
+<li>嵌入层用于将稀疏输入特征压缩为低维、密集的嵌入向量。共有三个 GPU 加速的嵌入阶段：
+<ul>
+<li>表查找</li>
+<li>每个插槽（slot）内的权重规约。</li>
+<li>跨插槽的权重拼接（concatenation）。</li>
+</ul>
+</li>
+<li>通过利用高效的 CUDA 优化技术和支持 CUDA 的库来支持前向和后向传播中的所有层，优化器和损失函数都是在 CUDA C++ 中实现的。</li>
+</ul>
+<p>为了训练大规模 CTR 估计模型，HugeCTR 中的嵌入表是模型并行的，并分布在同构集群中的所有 GPU 上，该集群由多个节点组成。每个 GPU 都有自己的：</p>
+<ul>
+<li>前馈神经网络（数据并行）来估计点击率。</li>
+<li>哈希表使数据预处理更容易并启用动态插入。</li>
+</ul>
+<p>所以，可以扩展到多个 GPU 和节点的HugtCTR的架构总结如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191736491-102256239.png" alt="" loading="lazy"></p>
+<h3 id="33-基于gpu的参数服务器">3.3 基于GPU的参数服务器</h3>
+<p>HugeCTR 实现的是一个基于GPU的参数服务器，其将embedding层放到GPU之中，worker通过与参数服务器的交互来获取embedding。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191752253-626961553.png" alt="" loading="lazy"></p>
+<p>图来自<a href="https://www.nvidia.cn/content/dam/en-zz/zh_cn/assets/webinars/nov19/HugeCTR_Webinar_1.pdf" target="_blank" rel="noopener nofollow">HugeCTR_Webinar</a></p>
+<h2 id="0x04-核心功能">0x04 核心功能</h2>
+<p>在本节中，我们将介绍 HugeCTR 的关键特性，这些特性有助于其高性能和可用性。<strong>注意</strong>：多节点训练和混合精度训练可以同时使用。</p>
+<h3 id="41-模型并行训练">4.1 模型并行训练</h3>
+<p>HugeCTR 原生支持模型并行和数据并行训练，使得在 GPU 上训练非常大的模型成为可能。</p>
+<h4 id="411-in-memory-gpu-hash-table">4.1.1 in-memory GPU hash table</h4>
+<p>在 CTR 估计中，嵌入（embedding）对于获得不错的模型精度几乎是必不可少的。它通常会导致对内存容量和带宽的高需求以及相当数量的并行性。如果embedding分布在多个 GPU 或多个节点上，则通信开销也可能很大。由于用户和物品数量庞大且不断增加，庞大的嵌入表在所难免。</p>
+<p>为了克服这些挑战并实现更快的训练，HugeCTR实现了自己的嵌入层，其中包括一个 GPU 加速的哈希表，并利用<a href="https://developer.nvidia.com/nccl" target="_blank" rel="noopener nofollow">NCCL</a> 作为其 GPU 间通信原语。哈希表的实现基于<a href="https://github.com/rapidsai/cudf" target="_blank" rel="noopener nofollow">RAPIDS cuDF 的</a>实现，<a href="https://github.com/rapidsai/cudf" target="_blank" rel="noopener nofollow">RAPIDS cuDF</a> 是来自 NVIDIA 的 GPU DataFrame 库。cuDF GPU 哈希表可以比 <a href="https://software.intel.com/en-us/tbb" target="_blank" rel="noopener nofollow">Threading Building Blocks (TBB)</a> 的 concurrent_hash_map 多出高达 35 倍的加速。</p>
+<p>总之，HugeCTR 支持跨越同构计算集群中的多个 GPU 和多个节点的<em>模型并行</em>嵌入表。嵌入的特征和类别可以分布在多个 GPU 和节点上。例如，如果您有两个具有 8xA100 80GB GPU 的节点，则可以完全在 GPU 上训练大至 1TB 的模型。通过使用<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/docs/hugectr_user_guide.md#embedding-training-cache" target="_blank" rel="noopener nofollow">嵌入训练缓存</a>，您可以在相同节点上训练更大的模型。</p>
+<h4 id="412-multi-slot-embedding">4.1.2 Multi-slot embedding</h4>
+<p>嵌入表可以被分割成多个槽（或feature fields）。在嵌入查找过程中，属于同一槽的稀疏特征输入在分别转换为相应的密集嵌入向量后，被简化为单个嵌入向量。然后，来自不同槽的嵌入向量连接在一起。</p>
+<p>多槽（multi-slot）嵌入通过以下方式提高了 GPU 间带宽利用率：</p>
+<ul>
+<li>当数据集中有很多特征时，它有助于将每个槽中有效特征的数量减少到可管理的程度。</li>
+<li>通过拼接不同插槽的输出，它减少了 GPU 之间的事务数量，从而促进了更高效的通信。</li>
+</ul>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191815464-2081887686.png" alt="" loading="lazy"></p>
+<p>下图显示了操作序列和 GPU 间通信 ( <code>all2all</code>) 是如何发生的。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215191909185-1991341954.png" alt="该图显示了一个跨越 4 个 GPU 的模型并行嵌入，以及它如何与这些 GPU 的神经网络进行交互。 它还显示了如何减少每个插槽的输入特征并跨两个插槽连接" loading="lazy"></p>
+<p>该图显示了一个跨越 4 个 GPU 的模型并行嵌入，以及它如何与这些 GPU 的神经网络进行交互。 它还显示了如何减少每个插槽的输入特征并跨两个插槽连接。图来自<a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a></p>
+<p>多槽嵌入对线性模型也很有用，它基本上是特征的加权和，只需将槽数和嵌入维度都设置为 1 即可。有关更多信息，请参阅<a href="https://github.com/NVIDIA/HugeCTR/tree/master/samples/wdl" target="_blank" rel="noopener nofollow">Wide &amp; Deep 示例</a>。</p>
+<h4 id="413-具体实现">4.1.3 具体实现</h4>
+<p>为了在不同的嵌入上获得最佳性能，可以选择不同的嵌入层实现。这些实现中的每一个都针对不同的实际培训案例，例如：</p>
+<ul>
+<li>
+<p><strong>LocalizedSlotEmbeddingHash</strong>：同一个槽（特征域）中的特征会存储在一个GPU中，这就是为什么它被称为“本地化槽”，根据槽的索引号，不同的槽可能存储在不同的GPU中。LocalizedSlotEmbedding 针对每个embedding 小于 GPU 内存大小的实例进行了优化。由于在 LocalizedSlotEmbedding 中使用了每个插槽的局部规约（查完 embedding 得到向量之后，因为已经拿到了这个slot 的所有 embedding，可以做完pooling之后再做多GPU卡通信），而在 GPU 之间没有全局规约，因此 LocalizedSlotEmbedding 中的整体数据传输量远小于 DistributedSlotEmbedding。</p>
+<p><strong>注意</strong>：确保输入数据集中没有任何重复的键。</p>
+</li>
+<li>
+<p><strong>DistributedSlotEmbeddingHash</strong>：所有特征都存储于不同特征域/槽上，不管槽索引号是多少，这些特征都根据特征的索引号分布到不同的GPU上。这意味着同一插槽中的特征可能存储在不同的 GPU 中，这就是将其称为“分布式插槽”的原因。由于需要全局规约，所以 DistributedSlotEmbedding 适合 embedding 大于 GPU 内存大小的情况，因而 DistributedSlotEmbedding 在 GPU 之间有更多的内存交换。</p>
+<p><strong>注意</strong>：确保输入数据集中没有任何重复的键。</p>
+</li>
+<li>
+<p><strong>LocalizedSlotEmbeddingOneHot</strong>：一种特殊的 LocalizedSlotEmbedding，需要一个独热数据输入。每个特征字段也必须从零开始索引。例如，性别应该是0,1，而1,2 就不正确。</p>
+</li>
+</ul>
+<p><u>一定要注意，LocalizedSlotEmbeddingHash 和 DistributedSlotEmbeddingHash 的区别在于同一个槽（特征域）中的特征 <strong>是不是</strong> 会存储在同一个GPU中。</u>比如，有 2 张GPU卡，有4个slot。</p>
+<ul>
+<li>local 模式 ：GPU0 存 slot0 和 slot1，GPU1 存 slot2 和 slot3。</li>
+<li>distribute 模式 ：每个 GPU 都会存所有 slot 的一部分参数，通过哈希方法决定如何将一个参数分配到哪个 GPU 上。</li>
+</ul>
+<h3 id="42-多节点训练">4.2 多节点训练</h3>
+<p>多节点训练使得我们很容易训练任意大小的嵌入表。在多节点解决方案中，稀疏模型（称为嵌入层）分布在节点之间。同时，密集模型（例如 DNN）是数据并行的，并且在每个 GPU 中都包含密集模型的副本（见下图）。通过我们的实施，HugeCTR 利用 NCCL 进行高速和可扩展的节点间和节点内通信。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192135475-1114142900.png" alt="" loading="lazy"></p>
+<p>图来自源码。</p>
+<p>要在多个节点上运行，HugeCTR 应该使用 OpenMPI 构建。建议支持<a href="https://docs.nvidia.com/cuda/gpudirect-rdma/index.html" target="_blank" rel="noopener nofollow">GPUDirect RDMA</a>以获得高性能。有关更多信息，请参阅<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/samples/dcn/dcn_2node_8gpu.py" target="_blank" rel="noopener nofollow">DCN 多节点训练样本</a>。</p>
+<h3 id="43-混合精度训练">4.3 混合精度训练</h3>
+<p>混合精度训练已成为在保持模型精度的同时实现进一步加速的常用技术，可以帮助我们改善和减少内存吞吐量占用。在 HugeCTR 中，可以配置全连接层以利用 NVIDIA Volta 架构及其后续架构上的张量核心。它们在内部使用 FP16 进行加速矩阵乘法，但其输入和输出仍为 FP32。</p>
+<p>混合精度训练在这种模式下，TensorCores 被用于提高基于矩阵乘法的层的性能，例如<code>FullyConnectedLayer</code>和<code>InteractionLayer</code>，在 Volta、Turing 和 Ampere 架构上。对于包括嵌入在内的其他层，数据类型更改为 FP16，以便节省内存带宽和容量。要启用混合精度模式，请在配置文件中指定 mix_precision 选项。当<a href="https://arxiv.org/abs/1710.03740" target="_blank" rel="noopener nofollow"><code>mixed_precision</code></a>设定，完整的FP16管道将被触发。将应用损失缩放以避免算术下溢（见图 ）。可以使用配置文件启用混合精度训练。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192152772-1824340961.png" alt="" loading="lazy"></p>
+<p>图 5：算术下溢  图来自源码。</p>
+<h3 id="44-sgd-优化器和学习率调度">4.4 SGD 优化器和学习率调度</h3>
+<p>学习率调度允许用户配置其超参数，包括以下内容：</p>
+<ul>
+<li><code>learning_rate</code>：基础学习率。</li>
+<li><code>warmup_steps</code>：用于预热的初始步骤数。</li>
+<li><code>decay_start</code>：指定学习率衰减开始的时间。</li>
+<li><code>decay_steps</code>：衰减期（逐步）。</li>
+</ul>
+<p>图 6 说明了这些超参数如何与实际学习率相互作用。</p>
+<p>有关更多信息，请参阅<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/docs/python_interface.md" target="_blank" rel="noopener nofollow">Python 接口</a>。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192214686-548520853.png" alt="" loading="lazy"></p>
+<p>图 6：学习率调度  图来自源码。</p>
+<h3 id="45-嵌入训练缓存">4.5 嵌入训练缓存</h3>
+<p>嵌入训练缓存（Model Oversubscription）使您能够训练高达 TB 的大型模型。它是通过在训练阶段以粗粒度、按需方式将超过 GPU 内存聚合容量的嵌入表的一个子集加载到 GPU 中来实现的。要使用此功能，您需要将数据集拆分为多个子数据集，同时从中提取唯一键集（见图 7）。</p>
+<p>此功能目前支持单节点和多节点训练。它支持所有嵌入类型，并且可以与<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/docs/python_interface.md#norm" target="_blank" rel="noopener nofollow">Norm</a>和<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/docs/python_interface.md#raw" target="_blank" rel="noopener nofollow">Raw</a>数据集格式一起使用。我们修改了我们的<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/tools/criteo_script/criteo2hugectr.cpp" target="_blank" rel="noopener nofollow"><code>criteo2hugectr</code>工具</a>以支持 Criteo 数据集的密钥集提取。有关更多信息，请参阅我们的<a href="https://github.com/NVIDIA-Merlin/HugeCTR/blob/master/notebooks/hugectr_criteo.ipynb" target="_blank" rel="noopener nofollow">Python Jupyter Notebook</a>，了解如何将此功能与 Criteo 数据集结合使用。</p>
+<p><strong>注意</strong>：Criteo 数据集是一个常见用例，但模型预取不限于此数据集。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192234043-650463983.png" alt="" loading="lazy"></p>
+<p>Fig. 7: Preprocessing of dataset for model oversubscription   图来自源码。</p>
+<h3 id="46-hugectr-到-onnx-转换器">4.6 HugeCTR 到 ONNX 转换器</h3>
+<p>HugeCTR to Open Neural Network Exchange (ONNX) 转换器是一个<code>hugectr2onnx</code>Python 包，可以将 HugeCTR 模型转换为 ONNX。它可以提高 HugeCTR 与其他深度学习框架的兼容性，因为 ONNX 作为 AI 模型的开源格式。</p>
+<p>使用我们的 HugeCTR Python API 进行训练后，您可以获得密集模型、稀疏模型和图形配置的文件，这些文件在使用该<code>hugectr2onnx.converter.convert</code>方法时需要作为输入。每个 HugeCTR 层将对应一个或多个 ONNX 算子，训练好的模型权重将作为初始化器加载到 ONNX 图中。此外，您可以选择使用<code>convert_embedding</code>标志转换稀疏嵌入层。</p>
+<h3 id="47-分层参数服务器">4.7 分层参数服务器</h3>
+<p>HugeCTR 分层参数服务器 (POC) 上的本地 SSD 和 CPU 内存之间实现了分层存储机制。通过这种实现，嵌入表不再需要存储在本地 CPU 内存中。添加了分布式 Redis 集群作为 CPU 缓存，以存储更大的嵌入表并直接与 GPU 嵌入缓存交互。为了帮助 Redis 集群查找丢失的嵌入键，已实现本地 RocksDB 作为查询引擎来备份本地 SSD 上的完整嵌入表。</p>
+<h3 id="48-异步多线程数据管道">4.8 异步多线程数据管道</h3>
+<p>如果没有高效的数据管道，即使向前和向后传播以光速运行，其效果也如同到达机场的时间远长于飞行时间。另外，当数据集很大并且经常变化时，将其拆分为多个文件是非常合理的。</p>
+<p>为了有效地把数据获取这个长延迟隐藏起来，HugeCTR 有一个多线程数据读取器，其可以将数据获取与实际模型训练重叠起来。如下图所示，<em>DataReader</em>是一个façade，由多个并行工作器和一个收集器组成。</p>
+<p>每个工作器每次从其分配到的数据集文件中读取一个批次。收集器会将收集到的数据记录分发到多个 GPU。所有的工作人员、收集器和模型训练作为不同的线程在 CPU 上同时运行。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192302483-1207697784.png" alt="该图显示了四个数据读取器如何将数据从磁盘读取到主机内存，一个收集器如何读取其中之一以提供给模型训练管道。" loading="lazy"></p>
+<p><em>Figure 4. HugeCTR multithreaded data reader.</em></p>
+<p>图来自<a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a></p>
+<p>下图 显示了 HugeCTR 流水线如何把 "数据从磁盘读取到 CPU 内存的数据"，"从 CPU 到 GPU 的数据传输"以及"在 GPU 上跨不同批次的实际训练"这三个阶段重叠起来。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192329115-85349226.png" alt="此图显示了“读取文件”、“复制到 GPU”和“训练”阶段如何重叠三个批次以提高 GPU 资源利用率。" loading="lazy"></p>
+<p>图来自<a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a></p>
+<h3 id="49-灵活模型配置">4.9 灵活模型配置</h3>
+<p>尽管 CTR 模型之间存在一些共性，但它们的细节（包括超参数）可能有所不同。为了实现模型的灵活定制，HugeCTR 允许以 JSON 格式直观地配置模型。</p>
+<p>例如，要描述如下图所示的混合模型，您可以编写如图 (b) 中抽象所示的“layers”子句。您可以有多个嵌入，您还可以指定批处理大小、优化器、数据路径等。在同一个配置文件中，您也可以指定用于训练的 GPU 数量和数量。有关更多信息，请参阅<a href="https://github.com/NVIDIA/HugeCTR/blob/master/docs/hugectr_user_guide.md#network-configurations" target="_blank" rel="noopener nofollow">HugeCTR 用户指南</a>和<a href="https://github.com/NVIDIA/HugeCTR/blob/master/samples" target="_blank" rel="noopener nofollow">示例配置文件</a>。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192357452-1618575852.png" alt="" loading="lazy"></p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220215192410556-1095035244.png" alt="" loading="lazy"></p>
+<ul>
+<li><em>Figure 6. A hybrid model with two embeddings and two different types of inputs. (a) An example mode expressible by HugeCTR.</em> <em>(b) The corresponding config. A lot of details are omitted for simplicity.</em></li>
+</ul>
+<p>图来自<a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a></p>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="https://developer.nvidia.com/blog/introducing-merlin-hugectr-training-framework-dedicated-to-recommender-systems/" target="_blank" rel="noopener nofollow">Introducing NVIDIA Merlin HugeCTR: A Training Framework Dedicated to Recommender Systems</a></p>
+<p><a href="https://developer.nvidia.com/blog/announcing-nvidia-merlin-application-framework-for-deep-recommender-systems/" target="_blank" rel="noopener nofollow">Announcing NVIDIA Merlin: An Application Framework for Deep Recommender Systems</a></p>
+<p><a href="https://developer.nvidia.com/blog/announcing-nvidia-merlin-application-framework-for-deep-recommender-systems/" target="_blank" rel="noopener nofollow">https://developer.nvidia.com/blog/announcing-nvidia-merlin-application-framework-for-deep-recommender-systems/</a></p>
+<p><a href="https://developer.nvidia.com/blog/accelerating-recommender-systems-training-with-nvidia-merlin-open-beta/" target="_blank" rel="noopener nofollow">https://developer.nvidia.com/blog/accelerating-recommender-systems-training-with-nvidia-merlin-open-beta/</a></p>
+<p><a href="https://blog.csdn.net/weixin_42717258/article/details/115643706" target="_blank" rel="noopener nofollow">HugeCTR源码阅读</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/350413810" target="_blank" rel="noopener nofollow">embedding层如何反向传播</a></p>
+<p><a href="https://web.eecs.umich.edu/~justincj/teaching/eecs442/notes/linear-backprop.html" target="_blank" rel="noopener nofollow">https://web.eecs.umich.edu/~justincj/teaching/eecs442/notes/linear-backprop.html</a></p>
+<p><a href="https://info.nvidia.com/235418-ondemand.html" target="_blank" rel="noopener nofollow">https://info.nvidia.com/235418-ondemand.html</a></p>
+<p><a href="https://www.nvidia.cn/content/dam/en-zz/zh_cn/assets/webinars/nov19/HugeCTR_Webinar_1.pdf" target="_blank" rel="noopener nofollow">HugeCTR_Webinar</a></p>
+<p><a href="https://www.cnblogs.com/futurehau/p/6181008.html" target="_blank">https://www.cnblogs.com/futurehau/p/6181008.html</a></p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1178.8920609681552" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-02-15 19:29">2022-02-15 19:29</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">2782</span>)&nbsp;
+评论(<span id="post_comment_count">2</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15897877);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15897877', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15897877.html', title: '[源码解析] NVIDIA HugeCTR，GPU 版本参数服务器 --(1)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15897877, cb_entryCreatedDate = '2022-02-15 19:29', cb_postType = 1, cb_postTitle = '[源码解析] NVIDIA HugeCTR，GPU 版本参数服务器 --(1)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://cnblogs.vip/store" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-tshirt')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202504/35695-20250419101710221-1948927053.jpg" onload="countCreativeImpressions('C1-tshirt')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDoSCkIlGtGundF7sEnOMIWd3O0mydmp5rMBm0ZHioOcloJoZtJowqmw3K6kttFL6hn9Q4QAYSAZp6qnAYRGEOgKtO5yc_cE98QnjSsI_2qCUhWRgf5XobyQCb5CSYZuNIk" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

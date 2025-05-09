@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="never" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。" />
+    <meta property="og:description" content="“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15763694.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15763694.html",
+      "headline": "[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)",
+      "description": "[源码解析] 快手八卦 机器学习分布式训练新思路(1) 0x00 摘要 “Bagua“ 是快手和苏黎世理工（ETH Z\u0026#252;rich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。其特点是： 并行性能显著提高； 对网络环境更",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-04T19:18:00.0000000&#x2B;08:00",
+      "dateModified": "2022-01-04T19:19:00.0000000&#x2B;08:00",
+      "wordCount": "40900",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15763694;
+            window.currentPostDateAdded = '2022-01-04 19:18';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15763694.html" title="发布于 2022-01-04 19:18">
+    <span role="heading" aria-level="2">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        “Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码解析-快手八卦-----机器学习分布式训练新思路1">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码解析-快手八卦-----机器学习分布式训练新思路1" rel="noopener nofollow">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-设计思路" rel="noopener nofollow">0x01 设计思路</a><ul><li><a href="#11-如何通信" rel="noopener nofollow">1.1 如何通信</a></li><li><a href="#12-通信模式分类" rel="noopener nofollow">1.2 通信模式分类</a><ul><li><a href="#121-系统架构" rel="noopener nofollow">1.2.1 系统架构</a></li><li><a href="#122-同步角度" rel="noopener nofollow">1.2.2 同步角度</a></li><li><a href="#123-通信拓扑" rel="noopener nofollow">1.2.3 通信拓扑</a></li><li><a href="#124-压缩" rel="noopener nofollow">1.2.4 压缩</a></li></ul></li><li><a href="#13-挑战" rel="noopener nofollow">1.3 挑战</a></li><li><a href="#14-bagua-实现" rel="noopener nofollow">1.4 Bagua 实现</a><ul><li><a href="#141-分层" rel="noopener nofollow">1.4.1 分层</a></li><li><a href="#142-通信算法选项" rel="noopener nofollow">1.4.2 通信算法选项</a></li><li><a href="#143-总体" rel="noopener nofollow">1.4.3 总体</a></li><li><a href="#144-优化" rel="noopener nofollow">1.4.4 优化</a></li></ul></li><li><a href="#15-流程图" rel="noopener nofollow">1.5 流程图</a></li></ul></li><li><a href="#0x02-分析思路" rel="noopener nofollow">0x02 分析思路</a></li><li><a href="#0x03-load-balanced-data-loader" rel="noopener nofollow">0x03 Load Balanced Data Loader</a><ul><li><a href="#31-使用" rel="noopener nofollow">3.1 使用</a></li><li><a href="#32-生成数据集" rel="noopener nofollow">3.2 生成数据集</a></li><li><a href="#33-初始化" rel="noopener nofollow">3.3 初始化</a></li><li><a href="#34-使用" rel="noopener nofollow">3.4 使用</a><ul><li><a href="#341-获取数据" rel="noopener nofollow">3.4.1 获取数据</a></li><li><a href="#342-shuffle" rel="noopener nofollow">3.4.2 shuffle</a></li><li><a href="#343-梳理" rel="noopener nofollow">3.4.3 梳理</a><ul><li><a href="#shuffle-细化" rel="noopener nofollow">shuffle 细化</a></li><li><a href="#二次打乱" rel="noopener nofollow">二次打乱</a></li><li><a href="#最终效果" rel="noopener nofollow">最终效果</a></li></ul></li></ul></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。其特点是：</p>
+<ul>
+<li>
+<p>并行性能显著提高；</p>
+</li>
+<li>
+<p>对网络环境更鲁棒；</p>
+</li>
+<li>
+<p>“一键式”使用；</p>
+</li>
+<li>
+<p>分布式通讯算法易拓展性；</p>
+</li>
+<li>
+<p>可用于工业级场景大规模使用；</p>
+</li>
+<li>
+<p>安全、故障易排查；</p>
+</li>
+</ul>
+<p>本文以：</p>
+<ul>
+<li>快手官方公共号文章 <a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a></li>
+<li>“bagua"论文 <a href="https://arxiv.org/pdf/2107.01499.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2107.01499.pdf</a></li>
+<li>“bagua"官方网站 <a href="https://tutorials.baguasys.com/" target="_blank" rel="noopener nofollow">https://tutorials.baguasys.com/</a></li>
+<li>“bagua" 演示文档</li>
+<li>项目 GitHub 地址：<a href="https://github.com/BaguaSys/bagua" target="_blank" rel="noopener nofollow">https://github.com/BaguaSys/bagua</a></li>
+</ul>
+<p>为基础来分析学习。本文学习“bagua"总体设计思路和负载均衡数据加载器。</p>
+<h2 id="0x01-设计思路">0x01 设计思路</h2>
+<p>以下摘录于快手官方帖子 <a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a> 和 ETH PPT，按照自己理解有调整。</p>
+<h3 id="11-如何通信">1.1 如何通信</h3>
+<p>在数据并行之中，从单机单卡的训练到多机多卡训练的核心，是每个卡把自己的计算结果进行累加和传播，所以一个关键点是两个worker之间如何进行通信。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190847377-1336015989.png" alt="" loading="lazy"></p>
+<p>这个过程好比每个人把自己知道的信息传递给他人，然后又从其他人那里获取信息，最后完成全局的信息同步。如果把计算单元之间的信息同步类比为人与人之间的信息同步，那么社会实践经验告诉我们，“八卦”可能是消息传递最高效的模式。“八卦”消息传播具有去中心化、异步通讯、信息压缩的特点，这与 Bagua 里面实现的通讯算法刚好一一呼应。</p>
+<h3 id="12-通信模式分类">1.2 通信模式分类</h3>
+<p>针对通信模式，有如下分类。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190914560-1273125302.png" alt="" loading="lazy"></p>
+<h4 id="121-系统架构">1.2.1 系统架构</h4>
+<p>按照系统架构来区分，是参数服务器和Allreduce。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190924602-888703135.png" alt="" loading="lazy"></p>
+<p>下图是参数服务器和Allreduce范式的图例。</p>
+<ul>
+<li>在<em>参数服务器</em>架构中，模型可以被分割成分片（shard）并分布到多个节点（我们称这些节点为 "参数服务器"）。在训练阶段，worker定期从参数服务器获取模型，利用计算单元（如GPU）进行前向和后向传播，并将梯度推送给参数服务器，而参数服务器汇总梯度并更新参数。</li>
+<li>在<em>Allreduce</em>范式之中，所有worker都与他们的邻居合作进行模型/梯度交换。现有的系统通常采用环形拓扑结构进行两阶段的交流：首先，范式将模型/梯度划分为n个块（其中n为节点数），并使用不同起点和终点的n个环来聚合n个块；其次，位于不同节点的每个块的聚合结果会在环内进行广播。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190933972-1723411237.png" alt="" loading="lazy"></p>
+<h4 id="122-同步角度">1.2.2 同步角度</h4>
+<p>从通信同步角度看可以分为同步或是异步（Synchronous or Asynchronous）：</p>
+<ul>
+<li>同步模式中，在每一次迭代过程中，所有工作节点都需要进行通信，并且下一步迭代必须等待当前迭代的通信完成才能开始。</li>
+<li>反之，异步式分布算法 则不需要等待时间：当某个节点完成计算后就可直接传递本地梯度，进行模型更新。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190942892-2042207610.png" alt="" loading="lazy"></p>
+<h4 id="123-通信拓扑">1.2.3 通信拓扑</h4>
+<p>从通信拓扑角度看可以分成中心化或是去中心化（Centralized or Decentralized）：</p>
+<ul>
+<li>在中心化的通讯模式中，梯度或模型的同步过程需要所有的工作节点进行参与，因此，较高的网络延时往往会导致训练效率的降低。</li>
+<li>去中心化的通信模式往往可以有效的解决上述问题：在该模式下，工作节点可以被连接成特定的拓扑结构（例如环），在通信过程中，每一个工作节点只与和它相邻的节点进行通信。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190949933-157625919.png" alt="" loading="lazy"></p>
+<h4 id="124-压缩">1.2.4 压缩</h4>
+<p>从通信压缩与否角度看，有完整精度模式或信息压缩模式（Full-Precision or Low-Precision）两种：</p>
+<ul>
+<li>完整精度模式会使用与本地模型相同的 32 位浮点数（float32）进行传输。</li>
+<li>另一方面，在通讯存在瓶颈的情况下，基于大量已有研究通过量化 (quantization) 或稀疏化 (sparsification) 等方法压缩梯度，再用压缩后的梯度更新参数。在很多场景下，可以达到和完整精度相同的精度，同时提升通讯效率。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104190959667-804400327.png" alt="" loading="lazy"></p>
+<h3 id="13-挑战">1.3 挑战</h3>
+<p>快手在实现之中，遇到了三个挑战：</p>
+<ul>
+<li>理论基础：通信模式需要有理论的支撑，需要严格在理论上证明通信是有效的，收敛的。</li>
+<li>系统设计：现有分布式学习系统都无法满足所有的新的通信模式，所以需要设计新的系统结构，才能利用这种算法带来的优势。
+<ul>
+<li>参数服务器基本操作put/get，无法实现去中心化和误差补偿。</li>
+<li>Allreduce是全局性的，无法实现去中心化或者异步模式。</li>
+</ul>
+</li>
+<li>评测：需要在大规模真实场景下对各种算法进行评测。</li>
+</ul>
+<h3 id="14-bagua-实现">1.4 Bagua 实现</h3>
+<h4 id="141-分层">1.4.1 分层</h4>
+<p>Bagua 具体分为三层：</p>
+<ul>
+<li>算法层：在逻辑层基础之上，实现了具体算法，比如某一个算法是去中心化，压缩，异步的。</li>
+<li>逻辑通信层：在物理通信层基础之上，实现了多种通信原语，比如去中心化，精度，同步等等，这些通信原语不是针对某一类算法特殊设计的，而对上层是统一的。</li>
+<li>物理通信层：在此层集成了一些常见通信库，从而提供了基本的send，receive操作。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104191013697-2045140872.png" alt="" loading="lazy"></p>
+<h4 id="142-通信算法选项">1.4.2 通信算法选项</h4>
+<p>针对通信模式分类，Bagua 相应将通信过程抽象成了如下的算法选项：</p>
+<ul>
+<li>
+<p>中心化或是去中心化（Centralized or Decentralized）。</p>
+</li>
+<li>
+<p>同步或是异步（Synchronous or Asynchronous）。</p>
+</li>
+<li>
+<p>完整精度模式或信息压缩模式（Full-Precision or Low-Precision）。</p>
+</li>
+</ul>
+<p>虽然为了提升通讯效率，Bagua 没有依照传统的方式同步所有计算节点的结果，甚至每次同步的信息还有偏差，但是得益于最新理论上的进展，这几种通讯策略以及他们的组合最终收敛解的正确性和效率仍然能得到充分保证，而且计算复杂度跟同步中心化和信息无损的方法相当，但是通讯效率更高。</p>
+<p><img src="https://static001.geekbang.org/wechat/images/60/60303238cd9efe3c9362175c45692dba.gif" alt="img" loading="lazy"></p>
+<p>Bagua 提供了一套详尽的通信模式来支持用户在上述模式中任意选择组合，我们将这一分布式训练系统对于上述算法选项的支持情况总结在下表中：</p>
+<p><img src="https://static001.geekbang.org/wechat/images/e9/e945069061f75ed2856f1d056554d2d0.jpeg" alt="img" loading="lazy"></p>
+<p>从表格中不难看出，现有框架的优化只是针对较为通用的算法（中心化同步完整精度），对于其他的算法组合，这些系统的支持非常有限。对于中心化同步进行信息压缩，这些系统往往只能支持较为简单的 float32-&gt;float16 压缩，相较而言，Bagua 则可以支持更为复杂的 ByteGrad，QAdam 等算法。对于其他的算法组合，现有的框架通常无法支持，而 Bagua 则可以自由支持。</p>
+<h4 id="143-总体">1.4.3 总体</h4>
+<p>BAGUA的核心是一个训练算法，由开发者使用BAGUA提供的通信原语和抽象概念来实现。算法将最终用户提供的神经网络作为输入，并为其配备一个特定于算法的通信功能。具体来说，算法的开发者会在执行的不同阶段将这个通信功能注册为钩子。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104191043077-301757985.png" alt="" loading="lazy"></p>
+<h4 id="144-优化">1.4.4 优化</h4>
+<p>然而，简单地支持算法选项并不能直接在大规模集群上带来性能的提升。Bagua 的核心优势在于，为了追求极致化的性能，而实现算法和实现的联合优化。具体来讲，基于上述的通信层抽象，用户既可以方便得选择系统提供的各种算法组合从而获得性能提升，又能灵活得实现新的分布式 SGD 算法 —— Bagua 将自动为这一算法实现提供系统层优化。这些系统优化包含：</p>
+<ul>
+<li>将通讯时间隐藏在计算时间中。</li>
+<li>参数分桶及其内存管理。</li>
+<li>分层化的通信实现。</li>
+</ul>
+<p>想要强调的是，这些系统实现层面的优化是对于各种算法组合广泛适用，而非局限在某一特定的算法设置上。因此，所有的系统优化都可以被灵活的复用到各种算法实现中去，这在保证“端到端”的性能提升的同时，也为开发新的分布式算法提供了良好的平台。</p>
+<h3 id="15-流程图">1.5 流程图</h3>
+<p>我们使用官方号的图例做一下总结</p>
+<p><img src="https://static001.geekbang.org/wechat/images/77/771a64c7b043047ace2ebb4c0853fa39.png" alt="img" loading="lazy"></p>
+<h2 id="0x02-分析思路">0x02 分析思路</h2>
+<p>通过官方文章我们可以发现对于分析学习来说有如下情况：</p>
+<ul>
+<li>通信方面的优化实现是八卦项目的一大特点。</li>
+<li>底层 Rust 语言笔者不熟悉。</li>
+<li>通盘研究整体代码不现实。</li>
+</ul>
+<p>因此我们决定以 <u>中心化、异步通讯，分层化的通信实现</u> 为中心，再结合几个特色实现来学习分析。本文学习负载均衡数据加载器。</p>
+<h2 id="0x03-load-balanced-data-loader">0x03 Load Balanced Data Loader</h2>
+<p>在某些场景下当训练数据中样本的计算复杂度是不同的，比如在 NLP 和语音任务中每个样本的长度就不同。这时，使用八卦的负载均衡数据加载器可以大大提高分布式训练吞吐量，在这种情况下，worker 的工作负载是相似的。我们接下来就从实例入手，看看<u>如何实现数据加载的负载均衡</u>。</p>
+<p>我们先看看负载均衡的需求，假如我们有两个模型副本进行数据并行，有如下数据，假如这些数据代表的是<u>数据复杂度（会影响计算时间）</u>：</p>
+<pre><code class="language-python">[ 7,  1, 11,  5,  10,  2,  9, 4,  6,  0,  8,  3]
+</code></pre>
+<p>那么第一个模型副本收到的数据为：[7，11，10，9，6， 8]。第二个模型副本收到的数据为：[1，5，2，4，0，3]。可以看出来两个模型在每个batch收到数据的复杂度不同，会造成负载不均衡。</p>
+<pre><code class="language-python">                         +  8                         + 3
+                         |                            |
+                         |  6                         | 0
+                         |                            |
+                         |  9                         | 4
+                         |                            |
+batch 3   +-----------&gt;  |  10                        | 2  &lt;----------+  batch 3
+                         |                            |
+batch 2   +-----------&gt;  |  11                        | 5  &lt;----------+  batch 2
+                         |                            |
+batch 1   +-----------&gt;  v  7                         v 1  &lt;----------+  batch 1
+
+                  +-------------------+        +-------------------+
+                  |                   |        |                   |
+                  |     worker 0      |        |     worker 1      |
+                  |                   |        |                   |
+                  |                   |        |                   |
+                  +-------------------+        +-------------------+
+</code></pre>
+<p>理想状态应该是两个模型每个batch收到的数据复杂度都相仿，比如第一个模型收到 [1，3，5，7，9]，第二个模型的数据是[2，4，6，8，10]，在下图的输入下，可以看到每次batch数据复杂度相仿，从而达到负载均衡的效果：</p>
+<pre><code class="language-python">                         +                            +
+                         |  9                         | 10
+                         |                            |
+                         |  7                         | 8
+                         |                            |
+batch 3   +-----------&gt;  |  5                         | 6  &lt;----------+  batch 3
+                         |                            |
+batch 2   +-----------&gt;  |  3                         | 4  &lt;----------+  batch 2
+                         |                            |
+batch 1   +-----------&gt;  v  1                         v 2  &lt;----------+  batch 1
+
+                  +-------------------+        +-------------------+
+                  |                   |        |                   |
+                  |     worker 0      |        |     worker 1      |
+                  |                   |        |                   |
+                  |                   |        |                   |
+                  +-------------------+        +-------------------+
+</code></pre>
+<h3 id="31-使用">3.1 使用</h3>
+<p>我们直接使用源码中的例子修改学习一下。</p>
+<pre><code class="language-python">import torch
+from load_balancing_data_loader import LoadBalancingDistributedSampler
+from torch.utils.data import TensorDataset, DataLoader
+
+def test_load_balancing_distributed_batch_sampler():
+    num_replicas = 2 # 分成两个副本
+    total_batch = 3 
+
+    n = sum([i + 1 for i in range(total_batch)]) * num_replicas
+    dataset = TensorDataset(torch.randn(n, 2), torch.randperm(n))
+
+    sampler = LoadBalancingDistributedSampler(
+        dataset,
+        complexity_fn=lambda x: x[1],
+        num_replicas=num_replicas,
+        rank=0,
+        shuffle=True, # 需要shuffle
+        random_level=0.5, # 加入随机
+    )
+
+    dataloader = torch.utils.data.DataLoader(dataset, sampler=sampler)
+
+    cur_idx = 0
+    for i, data in enumerate(dataloader):
+        batch_size = data[0].shape[0]
+        cur_idx += batch_size * num_replicas
+        print(cur_idx)
+
+test_load_balancing_distributed_batch_sampler()
+</code></pre>
+<p>因为此处代码十分绕，所以我们逐次解析。</p>
+<h3 id="32-生成数据集">3.2 生成数据集</h3>
+<p>首先是生成数据集部分。torch.randn(n, 2) 生成了随机张量，torch.randperm(n) 生成了 n 的随机排序。这里假定 n 是12。</p>
+<pre><code class="language-python"># 生成了数据集
+n = sum([i + 1 for i in range(total_batch)]) * num_replicas
+dataset = TensorDataset(torch.randn(n, 2), torch.randperm(n))
+</code></pre>
+<p>TensorDataset 类似 zip 命令，生成了tuple列表。</p>
+<pre><code class="language-python">dataset = {TensorDataset: 12} 
+ tensors = {tuple: 2} (
+   
+  0 = {Tensor: 12} tensor([[-1.5556,  0.6848],\n        [ 2.0811,  1.5011],\n        [ 0.7434, -0.4990],\n        [-0.2706,  1.7227],\n        [ 0.2179,  0.0622],\n        [-0.3014, -0.6435],\n        [-0.1773, -1.3405],\n        [-1.8212,  0.3702],\n        [-0.5526, -0.2077],\n        [-1.6543,  0.3109],\n        [ 0.3265,  0.5987],\n        [-1.5566,  0.2854]])
+   
+   1 = {Tensor: 12} tensor([ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3])
+</code></pre>
+<p>得出目前的TensorDataset如下 ，0 是实际数据，1 是数据复杂度，<u>后续处理的目的就是按照数据复杂度对这些张量排序</u>。我们可以设想下，最终排序应该就是一个复杂度均匀的排序结果。</p>
+<pre><code class="language-python">+-----------------------------------------------------------------------------+
+| TensorDataset                                                               |
+|                                                                             |
+|   0 = {Tensor: 12} tensor([[-1.5556,  0.6848],......                        |
+|                                                                             |
+|   1 = {Tensor: 12} tensor([ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3]) |
+|                                                                             |
++-----------------------------------------------------------------------------+
+</code></pre>
+<h3 id="33-初始化">3.3 初始化</h3>
+<p>我们来到了 LoadBalancingDistributedSampler 的初始化。</p>
+<pre><code class="language-python">def __init__(
+    self,
+    dataset: Dataset,
+    complexity_fn: Callable[..., int],
+    num_replicas: Optional[int] = None,
+    rank: Optional[int] = None,
+    shuffle: bool = True,
+    seed: int = 0,
+    drop_last: bool = False,
+    random_level: float = 0,
+) -&gt; None:
+    if num_replicas is None:
+        num_replicas = dist.get_world_size()
+    if rank is None:
+        rank = dist.get_rank()
+
+    self.dataset = dataset
+    self.num_replicas = num_replicas
+    self.rank = rank
+    self.epoch = 0
+    self.drop_last = drop_last
+
+    # If the dataset length is evenly divisible by # of replicas, then there
+    # is no need to drop any data, since the dataset will be split equally.
+    dataset_len = len(self.dataset)  # type: ignore
+    if self.drop_last and dataset_len % self.num_replicas != 0:  # type: ignore
+        # Split to nearest available length that is evenly divisible.
+        # This is to ensure each rank receives the same amount of data when
+        # using this Sampler.
+        self.num_samples = math.ceil(
+            # `type:ignore` is required because Dataset cannot provide a default __len__
+            # see NOTE in pytorch/torch/utils/data/sampler.py
+            (dataset_len - self.num_replicas)
+            / self.num_replicas
+        )
+    else:
+        self.num_samples = math.ceil(dataset_len / self.num_replicas)  # type: ignore
+    self.total_size = self.num_samples * self.num_replicas
+    self.shuffle = shuffle
+    self.seed = seed
+
+""" 
+此时变量为
+self = {LoadBalancingDistributedSampler: 6} 
+ dataset = {TensorDataset: 12} &lt;torch.utils.data.dataset.TensorDataset object at 0x7ff7385aecf8&gt;
+ drop_last = {bool} False
+ epoch = {int} 0
+ num_replicas = {int} 2
+ num_samples = {int} 6
+ rank = {int} 0
+ seed = {int} 0
+ shuffle = {bool} True
+ total_size = {int} 12 
+"""       
+    
+    # 以下是与PyTorch原生的主要不同之处
+    self.item_complexity_map = dict()
+    for item_index in range(dataset_len):
+        # 每一个item都有一个complexity
+        self.item_complexity_map[item_index] = complexity_fn(
+            self.dataset[item_index]
+        )
+
+"""
+complexity_fn 是选取 tuple 的第二个元素作为复杂度，我们回忆一下数据集的复杂度
+{Tensor: 12} tensor([ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3])
+
+所以得到了复杂度map如下：
+item_complexity_map = {dict: 12} {0: tensor(7), 1: tensor(8), 2: tensor(11), 3: tensor(4), 4: tensor(5), 5: tensor(2), 6: tensor(9), 7: tensor(10), 8: tensor(0), 9: tensor(6), 10: tensor(1), 11: tensor(3)}
+ 0 = {Tensor} tensor(7) # 第 0 个元素复杂度是 7
+ 1 = {Tensor} tensor(8) # 第 1 个元素复杂度是 8
+ 2 = {Tensor} tensor(11)
+ 3 = {Tensor} tensor(4)
+ 4 = {Tensor} tensor(5)
+ 5 = {Tensor} tensor(2)
+ 6 = {Tensor} tensor(9)
+ 7 = {Tensor} tensor(10)
+ 8 = {Tensor} tensor(0)
+ 9 = {Tensor} tensor(6)
+ 10 = {Tensor} tensor(1)
+ 11 = {Tensor} tensor(3)
+"""        
+        
+    # 按照复杂度排序    
+    self.ordered_item_complexity_map = OrderedDict(
+        sorted(self.item_complexity_map.items(), key=lambda t: t[1])
+    )
+    
+"""
+排序之后如下：
+ordered_item_complexity_map = {OrderedDict: 12} OrderedDict([(8, tensor(0)), (10, tensor(1)), (5, tensor(2)), (11, tensor(3)), (3, tensor(4)), (4, tensor(5)), (9, tensor(6)), (0, tensor(7)), (1, tensor(8)), (6, tensor(9)), (7, tensor(10)), (2, tensor(11))])
+ 8 = {Tensor} tensor(0) 第8个元素复杂度最低，是0
+ 10 = {Tensor} tensor(1) # 第10个元素复杂度次低，是1
+ 5 = {Tensor} tensor(2)
+ 11 = {Tensor} tensor(3)
+ 3 = {Tensor} tensor(4)
+ 4 = {Tensor} tensor(5)
+ 9 = {Tensor} tensor(6)
+ 0 = {Tensor} tensor(7)
+ 1 = {Tensor} tensor(8)
+ 6 = {Tensor} tensor(9)
+ 7 = {Tensor} tensor(10)
+ 2 = {Tensor} tensor(11)
+"""    
+    
+    max_complexity = max(self.item_complexity_map.values()) # 11
+    min_complexity = min(self.item_complexity_map.values()) # 0
+    self.random_number = int((max_complexity - min_complexity) * random_level + 1) # 6
+    
+# random_number = {int} 1
+  
+</code></pre>
+<p>拓展如下：</p>
+<ul>
+<li>TensorDataset ，0 = ... 是实际数据，1 = ... 是数据复杂度，后续就是按照复杂度排序，而且所有排序或者打乱都没有对原始数据进行移动，而是通过额外空间完成。</li>
+<li>初始化内部会对复杂度进行排序，
+<ul>
+<li>item_complexity_map 是得到每个元素的原始复杂度，比如 0: 7 表示第 0 个元素复杂度是 7。</li>
+<li>ordered_item_complexity_map 就是排序之后的结构，其中 (8, 0) 表示第8个元素复杂度最低，是0，整个map是升序排列。</li>
+</ul>
+</li>
+</ul>
+<p>TensorDataset 的逻辑图拓展如下，现在数据集 ordered_item_complexity_map 之中按照复杂度从低到高进行排序了。</p>
+<pre><code class="language-python">+-----------------------------------------------------------------------------+
+| TensorDataset                                                               |
+|                                                                             |
+|   0 = {Tensor: 12} tensor([[-1.5556,  0.6848],......                        |
+|                                                                             |
+|   1 = {Tensor: 12} tensor([ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3]) |
+|                                                                             |
++-------------------------------------------+---------------------------------+
+                                            |
+                                            |
+                                            v
++-------------------------------------------+------------------------------------------+
+| LoadBalancingDistributedSampler.__init__                                             |
+|                                                                                      |
+|                                                                                      |
+|  item_complexity_map = {dict: 12} {0: 7, 1: 8, 2: 11, 3: 4, 4: 5, 5: 2,              |
+|                                                                                      |
+|                                    6: 9, 7: 10, 8: 0, 9: 6, 10: 1, 11: 3}            |
+|                                           +                                          |
+|                                           |                                          |
+|                                           |  sorted                                  |
+|                                           |                                          |
+|                                           v                                          |
+|  ordered_item_complexity_map = {OrderedDict: 12} [(8, 0), (10, 1), (5, 2), (11, 3),  |
+|                                                                                      |
+|                    (3, 4), (4, 5), (9, 6), (0, 7), (1, 8), (6, 9), (7, 10), (2, 11)] |
+|                                                                                      |
++--------------------------------------------------------------------------------------+
+
+</code></pre>
+<h3 id="34-使用">3.4 使用</h3>
+<p>示例代码之中接下来是使用数据：</p>
+<pre><code class="language-python">dataloader = torch.utils.data.DataLoader(dataset, sampler=sampler)
+
+cur_idx = 0
+for i, data in enumerate(dataloader):
+    batch_size = data[0].shape[0]
+    cur_idx += batch_size * num_replicas
+    print(cur_idx)
+</code></pre>
+<h4 id="341-获取数据">3.4.1 获取数据</h4>
+<p>我们接下来看看如何获取数据，就是如何从loader拿到sample。</p>
+<ul>
+<li>首先会调用 shuffle_chunks 来打乱数据。</li>
+<li>然后得到自己rank对应的index。</li>
+</ul>
+<pre><code class="language-python">def __iter__(self) -&gt; Iterator:
+    index_chunks, chunk_indices = self.shuffle_chunks() # 打乱数据
+    # subsample
+    indices = [index_chunks[i][self.rank] for i in chunk_indices] # 用 rank来提取数据
+
+"""
+得到数据如下：
+chunk_indices = {list: 6} [0, 5, 4, 1, 2, 3] 把 index_chunks 顺序打乱，chunk_indices 是打乱之后的结果
+index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]] 均匀分成两组
+indices = {list: 6} [8, 7, 6, 5, 4, 0] 得到自己rank对应的index
+"""    
+    return iter(indices)
+</code></pre>
+<h4 id="342-shuffle">3.4.2 shuffle</h4>
+<p>我们看看shuffle 具体代码如下，这里最终要分成 6 =  12(数据数目) / 2( num_replicas ) 组数据。</p>
+<pre><code class="language-python">def shuffle_chunks(self):
+    def chunks_wrap_padding(lst, n):
+        """Yield successive n-sized chunks from lst."""
+        num_chunks = max(1, self.num_samples)
+        num_elements = num_chunks * n
+        current_lst = []
+        for i in range(num_elements):
+            current_lst.append(lst[i % len(lst)])
+            if len(current_lst) == n:
+                yield current_lst
+                current_lst = []
+
+    if self.shuffle: # 需要再次打乱
+        # deterministically shuffle based on epoch and seed
+        g = torch.Generator()
+        g.manual_seed(self.seed + self.epoch)
+
+        if self.random_number &gt; 0:
+            # 这里的打乱机制很巧妙，就是随机再生成复杂度，然后加到原先复杂度map上
+            item_complexity_map = self.item_complexity_map.copy() # 原来map做个拷贝
+            complexity_random_ints = torch.randint( # 新生成了一些复杂度变化值
+                self.random_number, (len(item_complexity_map),), generator=g
+            ).tolist()
+"""
+complexity_random_ints = {list: 12} [2, 3, 5, 0, 1, 3, 1, 1, 1, 3, 5, 2]
+
+item_complexity_map = {dict: 12} {0: tensor(7), 1: tensor(8), 2: tensor(11), 3: tensor(4), 4: tensor(5), 5: tensor(2), 6: tensor(9), 7: tensor(10), 8: tensor(0), 9: tensor(6), 10: tensor(1), 11: tensor(3)}
+"""
+            
+            # 原来复杂度map + 复杂度变化值
+            for k, v in zip(item_complexity_map, complexity_random_ints):
+                item_complexity_map[k] += v
+"""
+生成新的复杂度
+item_complexity_map = {0: tensor(9), 1: tensor(11), 2: tensor(16), 3: tensor(4), 4: tensor(6), 5: tensor(5), 6: tensor(10), 7: tensor(11), 8: tensor(1), 9: tensor(9), 10: tensor(6), 11: tensor(5)}
+"""
+        
+            # 再次对新复杂度排序
+            ordered_item_complexity_map = OrderedDict(
+                sorted(item_complexity_map.items(), key=lambda t: t[1])
+            )
+
+"""
+ordered_item_complexity_map = {OrderedDict: 12} OrderedDict([(8, tensor(1)), (3, tensor(4)), (5, tensor(5)), (11, tensor(5)), (4, tensor(6)), (10, tensor(6)), (0, tensor(9)), (9, tensor(9)), (6, tensor(10)), (1, tensor(11)), (7, tensor(11)), (2, tensor(16))])
+ 8 = {Tensor} tensor(1)
+ 3 = {Tensor} tensor(4)
+ 5 = {Tensor} tensor(5)
+ 11 = {Tensor} tensor(5)
+ 4 = {Tensor} tensor(6)
+ 10 = {Tensor} tensor(6)
+ 0 = {Tensor} tensor(9)
+ 9 = {Tensor} tensor(9)
+ 6 = {Tensor} tensor(10)
+ 1 = {Tensor} tensor(11)
+ 7 = {Tensor} tensor(11)
+ 2 = {Tensor} tensor(16)
+ __len__ = {int} 12
+"""
+        else:
+            ordered_item_complexity_map = self.ordered_item_complexity_map
+
+        index_chunks = list( # 按照 num_replicas 进行分片
+            chunks_wrap_padding(
+                list(ordered_item_complexity_map.keys()), self.num_replicas
+            )
+        )
+
+"""
+被均匀分配成两组，每组中两个元素的复杂度接近
+index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]]
+ 0 = {list: 2} [8, 3]
+ 1 = {list: 2} [5, 11]
+ 2 = {list: 2} [4, 10]
+ 3 = {list: 2} [0, 9]
+ 4 = {list: 2} [6, 1]
+ 5 = {list: 2} [7, 2]
+ __len__ = {int} 6
+"""        
+        # 再次打乱 index_chunks
+        chunk_indices = torch.randperm(len(index_chunks), generator=g).tolist()  # type: ignore
+    
+"""
+chunk_indices = {list: 6} [0, 5, 4, 1, 2, 3]
+"""    
+    
+    else:
+        index_chunks = list(
+            chunks_wrap_padding(
+                list(self.ordered_item_complexity_map.keys()), self.num_replicas
+            )
+        )
+        chunk_indices = list(range(len(index_chunks)))  # type: ignore
+
+    if not self.drop_last:
+        # add extra samples to make it evenly divisible
+        padding_size = self.num_samples - len(chunk_indices)
+        if padding_size &lt;= len(chunk_indices):
+            chunk_indices += chunk_indices[:padding_size]
+        else:
+            chunk_indices += (
+                chunk_indices * math.ceil(padding_size / len(chunk_indices))
+            )[:padding_size]
+    else:
+        # remove tail of data to make it evenly divisible.
+        chunk_indices = chunk_indices[: self.num_samples]
+    assert len(chunk_indices) == self.num_samples
+    return index_chunks, chunk_indices
+</code></pre>
+<p>总体拓展如下：</p>
+<ul>
+<li>TensorDataset ，0 = ... 是实际数据，1 = ... 是数据复杂度，后续就是按照复杂度排序：</li>
+<li><code>LoadBalancingDistributedSampler.__init__</code> 初始化内部会对复杂度进行排序，
+<ul>
+<li>item_complexity_map 是得到每个元素的复杂度，比如 0: 7 表示第 0 个元素复杂度是 7。</li>
+<li>ordered_item_complexity_map 就是按照复杂度排序之后的结构，其中 (8, 0) 表示第8个元素复杂度最低，是0。</li>
+</ul>
+</li>
+<li>shuffle_chunks 内部继续处理，这里的<u>打乱机制很巧妙，没有移动数据，而是随机再生成复杂度，然后加到原先复杂度map上，这样就打乱了</u>。
+<ul>
+<li>complexity_random_ints  新生成了一些复杂度变化值。</li>
+<li>item_complexity_map 把原来map做个拷贝。</li>
+<li>item_complexity_map 继续操作，即：新复杂度 = 原来复杂度map + 复杂度变化值。</li>
+<li>ordered_item_complexity_map 对新复杂度排序。</li>
+<li>对 ordered_item_complexity_map 按照 num_replicas 进行分片，得到 index_chunks，ordered_item_complexity_map 被均匀分配成六组，<u>每组中两个元素的复杂度接近</u>。</li>
+<li>然后再次打乱 index_chunks，得到 chunk_indices，就是为了把index顺序打乱而已。</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-python">+--------------------------------------------------------------------------------------+
+| TensorDataset                                                                        |
+|                                                                                      |
+|   0 = {Tensor: 12} tensor([[-1.5556,  0.6848],......                                 |
+|                                                                                      |
+|   1 = {Tensor: 12} tensor([ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3])          |
+|                                                                                      |
++-------------------------------------------+------------------------------------------+
+                                            |
+                                            |
+                                            v
++-------------------------------------------+------------------------------------------+
+| LoadBalancingDistributedSampler.__init__                                             |
+|                                                                                      |
+|                                                                                      |
+|  item_complexity_map = {dict: 12} {0: 7, 1: 8, 2: 11, 3: 4, 4: 5, 5: 2,              |
+|                                                                                      |
+|                                    6: 9, 7: 10, 8: 0, 9: 6, 10: 1, 11: 3}            |
+|                                           +                                          |
+|                                           |                                          |
+|                                           |  sorted                                  |
+|                                           |                                          |
+|                                           v                                          |
+|  ordered_item_complexity_map = {OrderedDict: 12} [(8, 0), (10, 1), (5, 2), (11, 3),  |
+|                                                                                      |
+|                    (3, 4), (4, 5), (9, 6), (0, 7), (1, 8), (6, 9), (7, 10), (2, 11)] |
+|                                                                                      |
++-------------------------------------------+------------------------------------------+
+                                            |
+                                            |
+                                            v
++-------------------------------------------+------------------------------------------+
+| __iter__                                                                             |
+|                                                                                      |
++-------------------------------------------+------------------------------------------+
+                                            |
+                                            |
+                                            v
++-------------------------------------------+------------------------------------------+
+|                                                                                      |
+| shuffle_chunks()                                                                     |
+|                                                                                      |
+|                                                                                      |
+|   complexity_random_ints = {list: 12} [2, 3, 5, 0, 1, 3, 1, 1, 1, 3, 5, 2]           |
+|                                                                                      |
+|                                                                                      |
+|                                                                                      |
+|   item_complexity_map = {0: 9, 1: 11, 2: 16, 3: 4, 4: 6, 5: 5, 6: 10, 7: 11, 8: 1,   |
+|                                                                                      |
+|                                                                9: 9, 10: 6, 11: 5}   |
+|                                                                                      |
+|                                                                                      |
+|                                                                                      |
+|   ordered_item_complexity_map = {OrderedDict: 12} [(8, 1), (3, 4), (5, 5), (11, 5),  |
+|                                                                                      |
+|                                                    (4, 6), (10, 6), (0, 9), (9, 9),  |
+|                                                                                      |
+|                                                (6, 10), (1, 11), (7, 11), (2, 16)])  |
+|                                                                                      |
+|                                           +                                          |
+|                                           |                                          |
+|                                           |                                          |
+|                                           v                                          |
+|                                                                                      |
+|     index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]]      |
+|                                                                                      |
+|                                                                                      |
+|     chunk_indices = {list: 6} [0, 5, 4, 1, 2, 3]                                     |
+|                                                                                      |
+|                                                                                      |
++--------------------------------------------------------------------------------------+
+
+</code></pre>
+<h4 id="343-梳理">3.4.3 梳理</h4>
+<h5 id="shuffle-细化">shuffle 细化</h5>
+<p>看到这里读者可能有点晕，所以我们需要具体梳理一下。</p>
+<p>ordered_item_complexity_map 就是按照复杂度排序之后的结构，其中 (8, 0) 表示第8个元素复杂度最低，是0。ordered_item_complexity_map 拥有 12个元素，按照两个副本分配，所以 ordered_item_complexity_map <u>应该被均匀分配成六组，每组中两个元素的复杂度接近</u>。</p>
+<p>index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]] 是最终的结果，这里[8, 3]是一组，复杂度接近，[5, 11]是一组，复杂度接近，比如结合 ordered_item_complexity_map 来看：</p>
+<ul>
+<li>
+<p>(8, 1), (3, 4) 就是说，第 8 个元素复杂度是1，第3个元素复杂度是4，所以 index 8，index 3 被分成一组。</p>
+</li>
+<li>
+<p>(5, 5), (11, 5) 就是说，第 5 个元素复杂度是5，第11个元素复杂度是5，所以 index 5，index 11 被分成一组。</p>
+</li>
+</ul>
+<p>shuffle_chunks 的演示如下：</p>
+<pre><code class="language-python">+--------------------------------------------------------------------------------------+
+| shuffle_chunks                                                                       |
+|                                                                                      |
+|                                                                                      |
+|                                      +--------------+     +---------------+          |
+|   ordered_item_complexity_map = [ +--+(8, 1), (3, 4)|   +-+(5, 5), (11, 5)|          |
+|                                   |  +--------------+   | +---------------+          |
+|                                   |                     |                            |
+|                                   |  +---------------+  | +---------------+          |
+|                              +-------+(4, 6), (10, 6)|  | |(0, 9), (9, 9) +-------+  |
+|                              |    |  +---------------+  | +---------------+       |  |
+|                              |    |                     |                         |  |
+|                              |    |  +----------------+ | +----------------+      |  |
+|                              |    |  |(6, 10), (1, 11)| | |(7, 11), (2, 16)|  ]   |  |
+|                              |    |  +-------------+--+ | +----------+-----+      |  |
+|                              |    |                |    |            |            |  |
+|                              +------------------+  +-------------+   +----+       |  |
+|                                   |             |       |        |        |       |  |
+|                                   |        +------------+   +---------------------+  |
+|                                   |        |    |           |    |        |          |
+|                                   v        v    v           v    v        v          |
+|     index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]]      |
+|                                                                                      |
+|                                      +                                               |
+|                                      |                                               |
+|                                      |                                               |
+|                                      v                                               |
+|                                                                                      |
+|     chunk_indices = {list: 6} [0, 5, 4, 1, 2, 3]                                     |
+|                                                                                      |
++--------------------------------------------------------------------------------------+
+</code></pre>
+<h5 id="二次打乱">二次打乱</h5>
+<p>我们结合原始数据再来分析，先回头看看 获取数据。</p>
+<pre><code class="language-python">def __iter__(self) -&gt; Iterator:
+    index_chunks, chunk_indices = self.shuffle_chunks()
+    # subsample
+    indices = [index_chunks[i][self.rank] for i in chunk_indices]
+
+"""
+得到数据如下：
+chunk_indices = {list: 6} [0, 5, 4, 1, 2, 3] 把 index_chunks 顺序打乱
+index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]] 均匀分成两组
+indices = {list: 6} [8, 7, 6, 5, 4, 0] 得到自己rank对应的index
+"""    
+    
+    assert len(indices) == self.num_samples
+
+    return iter(indices)
+</code></pre>
+<p>原始数据为 ：[ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3]，<u>后续会按照原始数据的index 来排序</u>。</p>
+<p>按照复杂度排序/shuffle之后，rank 0 就是  [8, 5, 4, 0, 6, 7]。rank 1 就是 [3, 11, 10, 9, 1, 2]。</p>
+<p>rank 0 和 rank 1 的batch 是  [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]] ，两两一组。</p>
+<p>但是，还需要<strong>再次打乱</strong>顺序，<u>因为目前这个batch是按照复杂度从小到大排序，这样会影响训练效果，所以需要打乱这个顺序</u>。所以就按照 chunk_indices [0, 5, 4, 1, 2, 3]  这个顺序来打乱。</p>
+<p>打乱之后的顺序是：[[8, 3],  [7, 2],  [6, 1],  [5, 11], [4, 10], [0, 9]]。</p>
+<ul>
+<li>
+<p>假如本worker 是 rank 0，则会获取  index_chunks 这六组数据中和自己对应的，得到 [8, 7, 6, 5, 4, 0]。</p>
+</li>
+<li>
+<p>假如本worker rank 1，则是 [3,2,1,11,10,9]。注意，这些还都是原始数据的index。</p>
+</li>
+</ul>
+<p>具体演示如下图（这里只给出 rank 0 的效果）：</p>
+<pre><code class="language-python">+--------------------------------------------------------------------------------------+
+| shuffle_chunks                                                                       |
+|                                                                                      |
+|                                      +--------------+     +---------------+          |
+|   ordered_item_complexity_map = [ +--+(8, 1), (3, 4)|   +-+(5, 5), (11, 5)|          |
+|                                   |  +--------------+   | +---------------+          |
+|                                   |                     |                            |
+|                                   |  +---------------+  | +---------------+          |
+|                               +------+(4, 6), (10, 6)|  | |(0, 9), (9, 9) +------+   |
+|                               |   |  +---------------+  | +---------------+      |   |
+|                               |   |                     |                        |   |
+|                               |   |  +----------------+ | +----------------+     |   |
+|                               |   |  |(6, 10), (1, 11)| | |(7, 11), (2, 16)|  ]  |   |
+|                               |   |  +-------------+--+ | +----------+-----+     |   |
+|                               |   |                |    |            |           |   |
+|                               +-----------------+  +-------------+   +----+      |   |
+|                                   |             |       |        |        |      |   |
+|                                   |        +------------+   +--------------------+   |
+|                                   |        |    |           |    |        |          |
+|                                   v        v    v           v    v        v          |
+|     index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]]      |
+|                                      +                                               |
+|                                      |                                               |
+|                                      |                                               |
+|                                      v                                               |
+|     chunk_indices = {list: 6} [0, 5, 4, 1, 2, 3]                                     |
+|                                                                                      |
++--------------------------------------+-----------------------------------------------+
+                                       |
+                                       |
+                                       v
+
++--------------------------------------------------------------------------------------+
+| __iter__                                                                             |
+|                                    0       1        2        3       4       5       |
+|        index_chunks = {list: 6} [[8, 3], [5, 11], [4, 10], [0, 9], [6, 1], [7, 2]]   |
+|                                   +       +        +        +       +       +        |
+|                                   |       |        |        |       |       |        |
+|                                   +----+  +-----+  |  +-----+       |       |        |
+|                                        |        |  |  |             |       |        |
+|                                        |        |  |  |             |       |        |
+|                                        v        v  v  v             |       |        |
+|                   indices = {list: 6} [8, 7, 6, 5, 4, 0]            |       |        |
+|                                           ^  ^                      |       |        |
+|                                           |  |                      |       |        |
+|                                           |  +----------------------+       |        |
+|                                           |                                 |        |
+|                                           +---------------------------------+        |
+|                                                                                      |
++--------------------------------------------------------------------------------------+
+</code></pre>
+<h5 id="最终效果">最终效果</h5>
+<p>我们看看最终效果是什么：</p>
+<ul>
+<li>
+<p>原始数据为 ：[ 7,  8, 11,  4,  5,  2,  9, 10,  0,  6,  1,  3]。</p>
+</li>
+<li>
+<p>最终shuffle/二次打乱之后的数据为：rank 0 是 [8, 7, 6, 5, 4, 0]，rank 1 则是 [3,2,1,11,10,9]。这里数值是原始数据的index。</p>
+</li>
+<li>
+<p>最终结果是：</p>
+<ul>
+<li>batch如下，rank 0 和 rank 1 的batch 是 [[8, 3],  [7, 2],  [6, 1],  [5, 11], [4, 10], [0, 9]]，两两一组。这里数值是原始数据的index。</li>
+<li>rank 0 的数据是 [0, 10, 9, 2, 5, 7]，rank 1的数据是[4, 11, 7, 3, 1, 6]，这里数值就是原始数据的数值了。</li>
+</ul>
+</li>
+</ul>
+<p>具体如下图，可以看到，因为过程之中引入了随机值，所以不是理想均衡状态，但已经比较均衡了：</p>
+<pre><code class="language-python">                         + 7                          + 6
+                         |                            |
+                         | 5                          | 1
+                         |                            |
+                         | 2                          | 3
+                         |                            |
+batch 3   +-----------&gt;  | 9                          | 7  &lt;----------+  batch 3
+                         |                            |
+batch 2   +-----------&gt;  | 10                         | 11 &lt;----------+  batch 2
+                         |                            |
+batch 1   +-----------&gt;  v 0                          v 4  &lt;----------+  batch 1
+
+                  +-------------------+        +-------------------+
+                  |                   |        |                   |
+                  |     worker 0      |        |     worker 1      |
+                  |                   |        |                   |
+                  |                   |        |                   |
+                  +-------------------+        +-------------------+
+</code></pre>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="http://blog.ezyang.com/2019/05/pytorch-internals/" target="_blank" rel="noopener nofollow">PyTorch internals</a></p>
+<p><a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a></p>
+<p><a href="https://arxiv.org/pdf/2107.01499.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2107.01499.pdf</a></p>
+<p>[1] Dean, Jeffrey, Greg S. Corrado, Rajat Monga, Kai Chen, Matthieu Devin, Quoc V. Le, Mark Z. Mao et al. “Large scale distributed deep networks.” (2012).</p>
+<p>[2] Zhengyuan Zhou, Panayotis Mertikopoulos, Nicholas Bambos, Peter Glynn, Yinyu Ye, Li-Jia Li, and Li Fei-Fei. 2018. Distributed asynchronous optimization with unbounded delays: How slow can you go?. In International Conference on Machine Learning. PMLR, 5970–5979.</p>
+<p>[3] DanAlistarh, DemjanGrubic, JerryLi, RyotaTomioka, and MilanVojnovic. 2016. QSGD: Communication-efficient SGD via gradient quantization and encoding. arXiv preprint arXiv:1610.02132 (2016).</p>
+<p>[4] Dan Alistarh, Torsten Hoefler, Mikael Johansson, Sarit Khirirat, Nikola Konstanti- nov, and Cédric Renggli. 2018. The convergence of sparsified gradient methods. In Proceedings of the 32nd International Conference on Neural Information Processing Systems. 5977–5987.</p>
+<p>[5] Anastasia Koloskova, Sebastian Stich, and Martin Jaggi. 2019. Decentralized stochastic optimization and gossip algorithms with compressed communication. In International Conference on Machine Learning. PMLR, 3478–3487.</p>
+<p>[6] Xiangru Lian, Ce Zhang, Huan Zhang, Cho-Jui Hsieh, Wei Zhang, and Ji Liu. 2017. Can decentralized algorithms outperform centralized algorithms? a case study for decentralized parallel stochastic gradient descent. In Proceedings of the 31st International Conference on Neural Information Processing Systems. 5336–5346.</p>
+<p>[7] Christopher De Sa, Matthew Feldman, Christopher Ré, and Kunle Olukotun. 2017. Understanding and optimizing asynchronous low-precision stochastic gradient descent. In Proceedings of the 44th Annual International Symposium on Computer Architecture. 561–574.</p>
+<p>[8] Xiangru Lian, Wei Zhang, Ce Zhang, and Ji Liu. 2018. Asynchronous decentral- ized parallel stochastic gradient descent. In International Conference on Machine Learning. PMLR, 3043–3052.</p>
+<p>[9] Hanlin Tang, Shaoduo Gan, Ce Zhang, Tong Zhang, and Ji Liu. 2018. Com- munication compression for decentralized training. In Proceedings of the 32nd International Conference on Neural Information Processing Systems. 7663–7673.</p>
+<p>[10] Ji Liu, Ce Zhang, et al. 2020. Distributed Learning Systems with First-Order Methods. Foundations and Trends® in Databases 9, 1 (2020), 1–100.![]</p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1220.8993820609294" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-01-04 19:19">2022-01-04 19:18</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">1406</span>)&nbsp;
+评论(<span id="post_comment_count">0</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15763694);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15763694', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15763694.html', title: '[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15763694, cb_entryCreatedDate = '2022-01-04 19:18', cb_postType = 1, cb_postTitle = '[源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.trae.com.cn/?utm_source=advertising&amp;utm_medium=cnblogs_ug_cpa&amp;utm_term=hw_trae_cnblogs" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-trae')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202504/35695-20250422130943631-261509646.jpg" onload="countCreativeImpressions('C1-字节-trae')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDp3PloeiDJwpGYkXv4AMTHmudedLqIcOipDaAEuXj9C6fbadFge7l4I8XyMESTPW3rCdHkhDL76cB9oDihf90OzCHfL2Qq6LTQj_NDArrgGqJgmku_pf_H8cMhuGYlxryY" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

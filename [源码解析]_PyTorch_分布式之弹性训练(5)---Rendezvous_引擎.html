@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="在前面的文章之中，我们已经学习了PyTorch 分布式的基本模块，介绍了官方的几个例子，我们接下来会介绍PyTorch的弹性训练，本文是第五篇，看看Rendezvous 的内部引擎，比如如何处理节点加入，节点离开，等待，心跳等等。" />
+    <meta property="og:description" content="在前面的文章之中，我们已经学习了PyTorch 分布式的基本模块，介绍了官方的几个例子，我们接下来会介绍PyTorch的弹性训练，本文是第五篇，看看Rendezvous 的内部引擎，比如如何处理节点加入，节点离开，等待，心跳等等。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎 - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15739391.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15739391.html",
+      "headline": "[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎",
+      "description": "[源码解析] PyTorch 分布式之弹性训练(5) Rendezvous 引擎 0x00 摘要 在前面的文章之中，我们已经学习了PyTorch 分布式的基本模块，介绍了官方的几个例子，我们接下来会介绍PyTorch的弹性训练，本文是第五篇，看看Rendezvous 的内部引擎，比如如何处理节点加入",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2021-12-28T09:55:00.0000000&#x2B;08:00",
+      "dateModified": "2021-12-28T09:55:00.0000000&#x2B;08:00",
+      "wordCount": "44079",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15739391;
+            window.currentPostDateAdded = '2021-12-28 09:55';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15739391.html" title="发布于 2021-12-28 09:55">
+    <span role="heading" aria-level="2">[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        在前面的文章之中，我们已经学习了PyTorch 分布式的基本模块，介绍了官方的几个例子，我们接下来会介绍PyTorch的弹性训练，本文是第五篇，看看Rendezvous 的内部引擎，比如如何处理节点加入，节点离开，等待，心跳等等。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码解析-pytorch-分布式之弹性训练5---rendezvous-引擎">[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码解析-pytorch-分布式之弹性训练5---rendezvous-引擎" rel="noopener nofollow">[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-前言" rel="noopener nofollow">0x01 前言</a><ul><li><a href="#11-总体系统" rel="noopener nofollow">1.1 总体系统</a></li><li><a href="#12-rendezvous" rel="noopener nofollow">1.2 Rendezvous</a></li><li><a href="#13-解耦" rel="noopener nofollow">1.3 解耦</a></li></ul></li><li><a href="#0x02-引擎实现" rel="noopener nofollow">0x02 引擎实现</a><ul><li><a href="#21-基类" rel="noopener nofollow">2.1 基类</a></li><li><a href="#22-分布式操作引擎" rel="noopener nofollow">2.2 分布式操作引擎</a><ul><li><a href="#221-定义" rel="noopener nofollow">2.2.1 定义</a></li><li><a href="#222-调用" rel="noopener nofollow">2.2.2 调用</a><ul><li><a href="#2221-_rendezvouskeepaliveop" rel="noopener nofollow">2.2.2.1 _RendezvousKeepAliveOp</a></li><li><a href="#2222-_rendezvouscloseop" rel="noopener nofollow">2.2.2.2 _RendezvousCloseOp</a></li><li><a href="#2223-_rendezvousjoinop" rel="noopener nofollow">2.2.2.3 _RendezvousJoinOp</a></li></ul></li><li><a href="#223-功能" rel="noopener nofollow">2.2.3 功能</a><ul><li><a href="#2231-主体循环" rel="noopener nofollow">2.2.3.1 主体循环</a></li><li><a href="#2232-同步" rel="noopener nofollow">2.2.3.2 同步</a><ul><li><a href="#后端" rel="noopener nofollow">后端</a></li><li><a href="#_sanitize" rel="noopener nofollow">_sanitize</a></li></ul></li></ul></li></ul></li></ul></li><li><a href="#0x03-算子" rel="noopener nofollow">0x03 算子</a><ul><li><a href="#31-操作" rel="noopener nofollow">3.1 操作</a></li><li><a href="#32-算子" rel="noopener nofollow">3.2 算子</a><ul><li><a href="#321-心跳" rel="noopener nofollow">3.2.1 心跳</a><ul><li><a href="#3211-检查心跳" rel="noopener nofollow">3.2.1.1 检查心跳</a></li><li><a href="#3212-定期调用" rel="noopener nofollow">3.2.1.2 定期调用</a></li><li><a href="#3212-设置心跳" rel="noopener nofollow">3.2.1.2 设置心跳</a></li></ul></li><li><a href="#322-关闭" rel="noopener nofollow">3.2.2 关闭</a></li><li><a href="#323-结束" rel="noopener nofollow">3.2.3 结束</a></li><li><a href="#324-join" rel="noopener nofollow">3.2.4 Join</a></li></ul></li></ul></li><li><a href="#0x04-业务操作" rel="noopener nofollow">0x04 业务操作</a><ul><li><a href="#41-加入参与者" rel="noopener nofollow">4.1 加入参与者</a></li><li><a href="#42-移除参与者" rel="noopener nofollow">4.2 移除参与者</a></li><li><a href="#43-加入等待序列" rel="noopener nofollow">4.3 加入等待序列</a></li><li><a href="#44-移除等待序列" rel="noopener nofollow">4.4 移除等待序列</a></li><li><a href="#45-设置结束" rel="noopener nofollow">4.5 设置结束</a></li><li><a href="#46-心跳" rel="noopener nofollow">4.6 心跳</a></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>在前面的文章之中，我们已经学习了PyTorch 分布式的基本模块，介绍了官方的几个例子，我们接下来会介绍PyTorch的弹性训练，本文是第五篇，看看Rendezvous 的内部引擎，比如如何处理节点加入，节点离开，等待，心跳等等。</p>
+<p>弹性训练系列文章如下：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15718043.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(1) --- 总体思路</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15725911.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(2)---启动&amp;单节点流程</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15728861.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(3)---代理</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15735170.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(4)---Rendezvous 架构和逻辑</a></p>
+<h2 id="0x01-前言">0x01 前言</h2>
+<h3 id="11-总体系统">1.1 总体系统</h3>
+<p>弹性训练可以理解为在 Rendezvous 基础之上的一个运行系统。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202112/1850883-20211228094028075-13469370.jpg" alt="" loading="lazy"></p>
+<ul>
+<li>
+<p>Agent 偏重具体节点上的逻辑</p>
+<ul>
+<li>Agent 负责具体业务逻辑相关操作，比如启动进程执行用户程序，监控用户程序运行情况，如果有异常就通知 Rendezvous。</li>
+<li>Agent 是一个 worker manager，负责启动/管理 workers 进程，组成一个 worker group，监控 workers 运行状态，捕获失效 workers，如果有故障/新加入worker，则重启 worker group。</li>
+<li>Agent负责维护 WORLD_SIZE 以及 RANK 信息。用户不需要再手动提供，Agent会自动处理这些。</li>
+<li>Agent 是具体节点上的后台进程，是独立个体。Agent自己无法实现整体上的弹性训练，所以需要一个机制来完成 worker 之间的相互发现，变更同步等等（WORLD_SIZE 和 RANK 这些信息其实也需要多个节点同步才能确定），这就是下面的 Rendezvous 概念。</li>
+</ul>
+</li>
+<li>
+<p>Rendezvous 负责</p>
+<p>集群逻辑</p>
+<p>，保证节点之间对于""有哪些节点参与训练"达成强一致共识。</p>
+<ul>
+<li>每一个 Agent 内部包括一个 Rendezvous handler，这些 handler 总体上构成了一个 Rendezvous 集群，从而构成了一个 Agent 集群。</li>
+<li>Rendezvous 完成之后，会创建一个共享键值存储（shared key-value store），这个store实现了一个<code>torch.distributed.Store</code> API。此存储仅由已完成Rendezvous的成员共享，它旨在让Torch Distributed Elastic在初始化作业过程之中交换控制和数据信息。</li>
+<li>Rendezvous 负责在每个agent之上维护当前 group 所有相关信息。每个 agent 之上有一个 rendezvous，它们会互相通信，总体维护一套信息，这些信息存储在上面提到的Store 之中。</li>
+<li>Rendezvous 负责集群逻辑相关，比如新加入节点，移除节点，分配rank等等。</li>
+</ul>
+</li>
+</ul>
+<h3 id="12-rendezvous">1.2 Rendezvous</h3>
+<p>目前为止，Rendezvous 信息如下，DynamicRendezvousHandler 属于动态逻辑，其中，<code>_RendezvousStateHolder</code> 是状态等元信息存储（静态结构），大家会发现图中还有一个 _RendezvousOpExecutor 没有介绍，这就是运行时引擎，所以我们本文看看 _RendezvousOpExecutor 如何处理。</p>
+<pre><code class="language-python">+-----------------------------+      +------------------------------------------------+
+| LocalElasticAgent           |      | WorkerSpec                                     |
+|                             |      |                                                |
+| +------------------------+  |      |   rdzv_handler = {DynamicRendezvousHandler} -------+
+| |WorkerGroup             |  |      |                                                |   |
+| |            spec +--------------&gt; |   entry = worker_fn                            |   |
+| |            workers     |  |      |                                                |   |
+| |            store       |  |      |   role = {str} 'trainer'                       |   |
+| |            group_rank  |  |      |                                                |   |
+| |       group_world_size |  |      +------------------------------------------------+   |
+| |                        |  |                                                           |
+| +------------------------+  |                                                           |
+|                             |                                                           |
+| rdzv_run_id                 |                                                           |
+| store                       |            +-----------------------------------------+    |
+|                             |            |DynamicRendezvousHandler                 |    |
++-----------------------------+            |                                         |    |
+                                           |                                         |    |
+                                           |   _settings: RendezvousSettings         | &lt;--+
+                                           |                                         |
+                                           |   _store: Store                         |
+                                           |                                         |
+                                           |   _state_holder: _RendezvousStateHolder |
+                                           |                                         |
+                                           |   _op_executor: _RendezvousOpExecutor   |
+                                           |                                         |
+                                           +-----------------------------------------+
+</code></pre>
+<h3 id="13-解耦">1.3 解耦</h3>
+<p>_RendezvousOpExecutor 把功能分割解耦：</p>
+<ul>
+<li>业务逻辑被抽象成为一系列算子，比如 <code>_RendevzousJoinOp</code>。</li>
+<li>Rendezvous 内部维护了一套由业务函数组成的状态机，比如函数 _add_to_participants 用来添加参与者。</li>
+<li><code>_RendezvousOpExecutor</code> 引擎来执行各种算子，依据算子结果，得到一个 Action，再利用 Action 调用业务函数进行操作。</li>
+</ul>
+<p>本文主要介绍C10d 后端对应的 Rendezvous 引擎。</p>
+<h2 id="0x02-引擎实现">0x02 引擎实现</h2>
+<h3 id="21-基类">2.1 基类</h3>
+<p>_RendezvousOpExecutor 是引擎的基类，只是定义了run这个虚函数。</p>
+<pre><code class="language-python">class _RendezvousOpExecutor(ABC):
+    """Executes rendezvous operations."""
+
+    @abstractmethod
+    def run(
+        self, state_handler: Callable[[_RendezvousContext, float], _Action], deadline: float
+    ) -&gt; None:
+        """Executes a rendezvous operation.
+
+        An operation is run inside a state machine and is expected to transition
+        the rendezvous from one state to another.
+
+        Args:
+            state_handler:
+                A callable that is expected to return the next state transition
+                action based on the current state of the rendezvous.
+            deadline:
+                The time, in seconds, at which the operation will be considered
+                timed-out.
+        """
+</code></pre>
+<p>这里用到了 _RendezvousContext，其作用是把 Rendezvous 的各种信息封装了起来，提供给操作引擎。这里就有了 _RendezvousState 和 RendezvousSettings 的使用。</p>
+<pre><code class="language-python">class _RendezvousContext:
+    """Holds the context of the rendezvous.
+
+    Attributes:
+        node:
+            The node descriptor associated with the current rendezvous handler
+            instance.
+        state:
+            The current state of the rendezvous.
+        settings:
+            The rendezvous settings.
+    """
+
+    node: _NodeDesc
+    state: _RendezvousState
+    settings: RendezvousSettings
+
+    def __init__(
+        self, node: _NodeDesc, state: _RendezvousState, settings: RendezvousSettings
+    ) -&gt; None:
+        self.node = node
+        self.state = state
+        self.settings = settings
+</code></pre>
+<h3 id="22-分布式操作引擎">2.2 分布式操作引擎</h3>
+<p>_DistributedRendezvousOpExecutor 拓展了 _RendezvousOpExecutor，是 ElasticTorch 的实际执行者。<u>类似于 Looper，负责消息分发，调用业务，状态维护</u>。</p>
+<h4 id="221-定义">2.2.1 定义</h4>
+<p>与其基类相比，_DistributedRendezvousOpExecutor 加入了比如节点信息，状态，配置这样的成员变量。</p>
+<pre><code class="language-python">class _DistributedRendezvousOpExecutor(_RendezvousOpExecutor):
+    """Executes rendezvous operations using a shared state.
+
+    Args:
+        node:
+            The node descriptor associated with the current rendezvous handler
+            instance.
+        state_holder:
+            The ``RendezvousStateHolder`` to use to sync the rendezvous state
+            with other nodes.
+        settings:
+            The rendezvous settings.
+    """
+
+    _node: _NodeDesc
+    _state: _RendezvousState
+    _state_holder: _RendezvousStateHolder
+    _settings: RendezvousSettings
+
+    def __init__(
+        self,
+        node: _NodeDesc,
+        state_holder: _RendezvousStateHolder,
+        settings: RendezvousSettings,
+    ) -&gt; None:
+        self._node = node
+        self._state_holder = state_holder
+        self._settings = settings
+</code></pre>
+<p>逻辑如下：</p>
+<pre><code class="language-python">+---------------------------------------------------------------+
+| _DistributedRendezvousOpExecutor                              |
+|                                                               |
+|                     +------------------------+                |
+|        _state +---&gt; | _RendezvousState       |                |
+|                     |                        |                |
+|                     |       participants     |                |
+|                     |       wait_list        |                |
+|                     |       last_heartbeats  |                |
+|                     |       deadline         |                |
+|                     +------------------------+                |
+|                                                               |
+|                     +-------------------------+               |
+|      _settings +--&gt; | RendezvousSettings      |               |
+|                     |                         |               |
+|                     +-------------------------+               |
+|                                                               |
+|                     +--------------------------------------+  |
+| _state_holder +---&gt; | _BackendRendezvousStateHolder        |  |
+|                     |                                      |  |
+|                     |        _backend: RendezvousBackend   |  |
+|                     |        _state: _RendezvousState      |  |
+|                     |        _settings: RendezvousSettings |  |
+|                     |                                      |  |
+|                     +--------------------------------------+  |
+|                     +--------------------------------------+  |
+|                     | _NodeDesc                            |  |
+|     _node +-------&gt; |              fqdn: str               |  |
+|                     |              pid: int                |  |
+|                     |              local_id: int           |  |
+|                     |                                      |  |
+|                     +--------------------------------------+  |
++---------------------------------------------------------------+
+</code></pre>
+<h4 id="222-调用">2.2.2 调用</h4>
+<p>我们举出几个例子来看看如何调用引擎，可以看到都是先设置算子，然后调用引擎的run函数。</p>
+<h5 id="2221-_rendezvouskeepaliveop">2.2.2.1 _RendezvousKeepAliveOp</h5>
+<pre><code class="language-python">def _keep_alive(self) -&gt; None:
+    self._heartbeat_lock.acquire()
+    op = _RendezvousKeepAliveOp() # 设置算子
+    deadline = self._get_deadline(self._settings.timeout.heartbeat)
+    self._op_executor.run(op, deadline) # 调用
+</code></pre>
+<h5 id="2222-_rendezvouscloseop">2.2.2.2 _RendezvousCloseOp</h5>
+<pre><code class="language-python">def _close(self) -&gt; None:
+    op = _RendezvousCloseOp() # 设置算子
+    deadline = self._get_deadline(self._settings.timeout.close)
+    self._op_executor.run(op, deadline) # 调用
+</code></pre>
+<h5 id="2223-_rendezvousjoinop">2.2.2.3 _RendezvousJoinOp</h5>
+<pre><code class="language-python">def next_rendezvous(self) -&gt; Tuple[Store, int, int]:
+    """See base class."""
+
+    self._stop_heartbeats()
+
+    # Delay the execution for a small random amount of time if this is our
+    # first run. This will slightly skew the rendezvous attempts across the
+    # nodes and reduce the load on the backend.
+    if self._state_holder.state.round == 0:
+        _delay(seconds=(0, 0.3))
+
+    exit_op = _RendezvousExitOp() # 设置算子
+    join_op = _RendezvousJoinOp() # 设置算子
+
+    deadline = self._get_deadline(self._settings.timeout.join)
+
+    self._op_executor.run(exit_op, deadline) # 这里会进行调用
+    self._op_executor.run(join_op, deadline) # 调用
+
+    self._start_heartbeats()
+
+    rank, world_size = self._get_world()
+    store = self._get_store()
+
+    return store, rank, world_size
+</code></pre>
+<h4 id="223-功能">2.2.3 功能</h4>
+<p>_DistributedRendezvousOpExecutor 之中，run 函数实现了基础逻辑，就是依据 action 类型进行各种操作。</p>
+<h5 id="2231-主体循环">2.2.3.1 主体循环</h5>
+<p>run 具体代码如下：</p>
+<pre><code class="language-python">    def run(
+        self, state_handler: Callable[[_RendezvousContext, float], _Action], deadline: float
+    ) -&gt; None:
+        """See base class."""
+        action = None
+
+        while action != _Action.FINISH: # 循环，一直到获得一个FINISH action 为止
+            # Reads or writes the latest rendezvous state shared by all nodes in
+            # the rendezvous. Note that our local changes might get overridden
+            # by another node if that node synced its changes before us.
+            
+            # 这里很重要，在所有node之间做信息同步
+            has_set = self._state_holder.sync() # 因为最新状态在 rendezvous。
+
+            self._state = self._state_holder.state
+
+            ctx = _RendezvousContext(self._node, self._state, self._settings)
+
+            # Determine the next action to take based on the current state of
+            # the rendezvous.
+            action = state_handler(ctx, deadline) # 决定下一个操作，state_handler 就是算子
+
+            if action == _Action.FINISH:
+                continue
+
+            if action == _Action.ERROR_CLOSED:
+                raise RendezvousClosedError()
+
+            if action == _Action.ERROR_TIMEOUT:
+                raise RendezvousTimeoutError()
+
+            if action == _Action.SYNC:
+                # Delay the execution by one second to avoid overloading the
+                # backend if we are asked to poll for state changes.
+                _delay(seconds=1)
+            else:
+                if action == _Action.KEEP_ALIVE:
+                    self._keep_alive()
+                elif action == _Action.ADD_TO_PARTICIPANTS:
+                    self._add_to_participants()
+                elif action == _Action.ADD_TO_WAIT_LIST:
+                    self._add_to_wait_list()
+                elif action == _Action.REMOVE_FROM_PARTICIPANTS:
+                    self._remove_from_participants()
+                elif action == _Action.REMOVE_FROM_WAIT_LIST:
+                    self._remove_from_wait_list()
+                elif action == _Action.MARK_RENDEZVOUS_COMPLETE:
+                    self._mark_rendezvous_complete()
+                elif action == _Action.MARK_RENDEZVOUS_CLOSED:
+                    self._mark_rendezvous_closed()
+
+                # Attempt to sync our changes back to other nodes.
+                self._state_holder.mark_dirty()
+</code></pre>
+<p>具体如下图。</p>
+<pre><code class="language-python">+-----------------------------------------+                          +---------------------------------------------------------------+
+|DynamicRendezvousHandler                 |                          | _DistributedRendezvousOpExecutor                              |
+|                                         |                          |                                                               |
+|                                         |                          |                     +------------------------+                |
+|   _settings: RendezvousSettings         |                          |        _state +---&gt; | _RendezvousState       |                |
+|                                         |                          |                     |                        |                |
+|                                         |                          |                     |       participants     |                |
+|   _store: Store                         |                          |                     |       wait_list        |                |
+|                                         |                          |                     |       last_heartbeats  |                |
+|                                         |                          |                     |       deadline         |                |
+|   _state_holder: _RendezvousStateHolder |                          |                     +------------------------+                |
+|                                         | run(_RendezvousJoinOp()) |                     +-------------------------+               |
+|                                         |                          |      _settings +--&gt; | RendezvousSettings      |               |
+|   _op_executor  +------------------------------------------------&gt; |                     |                         |               |
+|                                         |                          |                     +-------------------------+               |
+|                                         |                          |                     +--------------------------------------+  |
++-----------------------------------------+                          | _state_holder +---&gt; | _BackendRendezvousStateHolder        |  |
+                                                                     |                     |                                      |  |
+                                                                     |                     |        _backend: RendezvousBackend   |  |
+                                                                     |                     |        _state: _RendezvousState      |  |
+                                                                     |                     |        _settings: RendezvousSettings |  |
+                                                                     |                     |                                      |  |
+                                                                     |                     +--------------------------------------+  |
+                                                                     |                     +--------------------------------------+  |
+                                                                     |                     | _NodeDesc                            |  |
+                                                                     |     _node +-------&gt; |              fqdn: str               |  |
+                                                                     |                     |              pid: int                |  |
+                                                                     |                     |              local_id: int           |  |
+                                                                     |                     |                                      |  |
+                                                                     |                     +--------------------------------------+  |
+                                                                     +---------------------------------------------------------------+
+</code></pre>
+<p>手机如下：</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202112/1850883-20211228094118160-1034966967.png" alt="" loading="lazy"></p>
+<h5 id="2232-同步">2.2.3.2 同步</h5>
+<p>在 run 函数之中，需要注意的是：<u><strong>在执行各种算子操作之前</strong>，会调用 self._state_holder.sync() 在各个 worker 之间进行一个状态同步，达成共识 （consensus）</u>。</p>
+<pre><code class="language-python">def sync(self) -&gt; Optional[bool]:
+    """See base class."""
+    state_bits: Optional[bytes] = None
+    token = None
+    has_set: Optional[bool]
+
+    if self._dirty: # 如果本node状态变化了
+        has_set = False
+        state_bits = pickle.dumps(self._state)
+        # 把自己的状态设置到backend之中
+        set_response = self._backend.set_state(state_bits, self._token)
+        if set_response is not None:
+            state_bits, token, has_set = set_response
+    else: # 自己没变化，只能从后端获取
+        has_set = None
+        if self._cache_duration &gt; 0:
+            # Avoid overloading the backend if we are asked to retrieve the
+            # state repeatedly. Try to serve the cached state.
+            if self._last_sync_time &gt;= max(time.monotonic() - self._cache_duration, 0):
+                return None
+        get_response = self._backend.get_state() # 从backend获取其他节点最新状态
+        if get_response is not None:
+            state_bits, token = get_response
+
+    if state_bits is not None:
+        try:
+            self._state = pickle.loads(state_bits) # 用后端状态更新本身的状态
+        except pickle.PickleError as exc:
+            raise RendezvousStateError(
+                "The rendezvous state is corrupt. See inner exception for details."
+            ) from exc
+    else:
+        self._state = _RendezvousState()
+
+    if has_set and self._dead_nodes and log.isEnabledFor(logging.DEBUG):
+        node_list = ", ".join(f"'{dead_node}'" for dead_node in self._dead_nodes)
+        msg = (
+            f"As part of the sync operation the node(s) {node_list} have been removed from the "
+            f"rendezvous '{self._settings.run_id}' since they had no heartbeat."
+        )
+        self._record(message=msg)
+
+    self._token = token
+    self._dirty = False
+    self._last_sync_time = time.monotonic()
+    self._sanitize()
+
+    return has_set
+</code></pre>
+<h6 id="后端">后端</h6>
+<p>torch/distributed/elastic/rendezvous/c10d_rendezvous_backend.py 之中是对应后端代码。</p>
+<p>后端这里使用 store 作为一个集中式存储，是master。每个 node 是 client，会去master更新自己状态，并且获取其他node状态。这样所有node就会互通有无，达成共识。这里也会定期删除不更新元数据的clients。</p>
+<p>get_state 就是简单的从 store 提取。</p>
+<pre><code class="language-python">def get_state(self) -&gt; Optional[Tuple[bytes, Token]]:
+    """See base class."""
+    base64_state: bytes = self._call_store("get", self._key)
+
+    return self._decode_state(base64_state)
+</code></pre>
+<p>set_state 会做一个compare set，其返回new state和是否更新了state。</p>
+<pre><code class="language-python">def set_state(
+    self, state: bytes, token: Optional[Token] = None
+) -&gt; Optional[Tuple[bytes, Token, bool]]:
+    """See base class."""
+    base64_state_str: str = b64encode(state).decode()
+
+    if token:
+        # Shortcut if we know for sure that the token is not valid.
+        if not isinstance(token, bytes):
+            result = self.get_state()
+            if result is not None:
+                tmp = *result, False
+                # Python 3.6 does not support tuple unpacking in return
+                # statements.
+                return tmp
+            return None
+
+        token = token.decode()
+    else:
+        token = self._NULL_SENTINEL
+
+    base64_state: bytes = self._call_store("compare_set", self._key, token, base64_state_str)
+
+    state_token_pair = self._decode_state(base64_state)
+    if state_token_pair is None:
+        return None
+
+    new_state, new_token = state_token_pair
+
+    # C10d Store's compare_set method does not offer an easy way to find out
+    # whether our write attempt was successful. As a brute-force solution we
+    # perform a bitwise comparison of our local state and the remote state.
+    return new_state, new_token, new_state == state
+</code></pre>
+<h6 id="_sanitize">_sanitize</h6>
+<p>_sanitize 方法用来依据其他节点消息做处理，比如清理故障节点。即，如果上一次的心跳时间超过了一定阈值范围，则会把这些节点标记为dead_node，并且从 participant或者wait list中清除这些节点。</p>
+<pre><code class="language-python">def _sanitize(self) -&gt; None:
+    state = self._state
+
+    expire_time = datetime.utcnow() - (
+        self._settings.keep_alive_interval * self._settings.keep_alive_max_attempt
+    )
+
+    # Filter out the dead nodes.
+    self._dead_nodes = [
+        node
+        for node, last_heartbeat in state.last_heartbeats.items()
+        if last_heartbeat &lt; expire_time
+    ]
+
+    participant_removed = False
+
+    for dead_node in self._dead_nodes:
+        del state.last_heartbeats[dead_node] # 移除故障节点
+
+        try:
+            del state.participants[dead_node] # 移除故障节点
+
+            participant_removed = True
+        except KeyError:
+            pass
+
+        try:
+            state.wait_list.remove(dead_node) # 移除故障节点
+        except KeyError:
+            pass
+
+    if participant_removed:
+        # Common epilogue shared with the _remove_from_participants()
+        # function of _DistributedRendezvousOpExecutor.
+        _remove_participant_epilogue(state, self._settings)
+</code></pre>
+<p>介绍完毕如何运行引擎，我们接下来看看具体算子。</p>
+<h2 id="0x03-算子">0x03 算子</h2>
+<p><code>_RendezvousOpExecutor</code> 引擎的业务逻辑被分成两层：用户操作 和 内部业务逻辑。用户操作和内部业务机制之间被解耦。</p>
+<ul>
+<li>
+<p>用户操作被分成各种算子，包括：心跳，Join，关闭，结束。比如Join 算子就是 <code>_RendevzousJoinOp</code>。</p>
+</li>
+<li>
+<p>内部业务逻辑被分成各种业务函数，比如 _add_to_participants 方法从等待列表中移除节点，往 participants 加入这个节点。</p>
+</li>
+<li>
+<p>算子和内部业务逻辑并不是一一对应，需要一个类似状态机的机制来控制。</p>
+<ul>
+<li>比如，心跳操作算子的结果可能是：超时/keep alive/正常结束，所以应该根据这个结果调用不同的内部业务函数。<u>这种对应关系逻辑就是通过 Action 来完成的</u>。</li>
+<li>各种算子联合起来，聚合成了一个状态机。</li>
+<li>算子内部就是生成各种 Action，决定了状态机的下一步操作。</li>
+</ul>
+</li>
+<li>
+<p>引擎内部就是根据 Action 来执行具体业务逻辑，或者可以说，是通过 Action 进行解耦。</p>
+</li>
+</ul>
+<p>具体如下，引擎从逻辑上可以分成三层：最上面是算子层，中间是 Action 层，下面是业务函数层。</p>
+<pre><code class="language-python">+-----------------------------------------------------------------------------------------+
+|                                                                                         |
+| _RendezvousKeepAliveOp    _RendezvousCloseOp    _RendezvousExitOp    _RendezvousJoinOp  |
+|                                                                                         |
++-------------+---------------------+--------------------+------------------+-------------+
+              |                     |                    |                  |
+              |                     |                    |                  |
+              |                     |                    |                  |
+              |                     |                    |                  |
+              v                     v                    v                  v
+
++-----------------------------------------------------------------------------------------+
+|                                                                                         |
+| KEEP_ALIVE   ADD_TO_PARTICIPANTS   ADD_TO_WAIT_LIST   REMOVE_FROM_WAIT_LIST   ......    |
+|                                                                                         |
++-------------+----------+----------+----------+---------+---------+---------+------------+
+              |          |          |          |         |         |         |
+              |          |          |          |         |         |         |
+              |          |          |          |         |         |         |
+              |          |          |          |         |         |         |
+              v          v          v          v         v         v         v
+
++-----------------------------------------------------------------------------------------+
+|                                                                                         |
+| _add_to_participants    _remove_from_participants     _add_to_wait_list        ......   |
+|                                                                                         |
+|                                                                                         |
++-----------------------------------------------------------------------------------------+
+</code></pre>
+<p>我们逐一解析。</p>
+<h3 id="31-操作">3.1 操作</h3>
+<p>先来解析<strong>中间层 Action</strong>，看看有多少 Action。基于 rendezvous 的状态，引擎的actions具体如下。代码位于 torch/distributed/elastic/rendezvous/dynamic_rendezvous.py</p>
+<pre><code class="language-python">class _Action(Enum):
+    """Specifies the possible actions based on the state of the rendezvous."""
+
+    KEEP_ALIVE = 1
+    ADD_TO_PARTICIPANTS = 2
+    ADD_TO_WAIT_LIST = 3
+    REMOVE_FROM_PARTICIPANTS = 4
+    REMOVE_FROM_WAIT_LIST = 5
+    MARK_RENDEZVOUS_COMPLETE = 6
+    MARK_RENDEZVOUS_CLOSED = 7
+    SYNC = 8
+    ERROR_CLOSED = 9
+    ERROR_TIMEOUT = 10
+    FINISH = 11
+</code></pre>
+<h3 id="32-算子">3.2 算子</h3>
+<p>引擎之中实现了一些算子，基本上，一个操作对应一个算子，我们给出几个操作算子的例子，<u>算子就是依据rendezvous的状态来设置操作类型</u>。</p>
+<h4 id="321-心跳">3.2.1 心跳</h4>
+<h5 id="3211-检查心跳">3.2.1.1 检查心跳</h5>
+<p>_RendezvousKeepAliveOp 的作用是：依据当前状态和时间来确定下一步Action。主要是定期检查本Node是否故障。</p>
+<pre><code class="language-python">class _RendezvousKeepAliveOp:
+    """Represents a rendezvous keep-alive update operation."""
+
+    def __call__(self, ctx: _RendezvousContext, deadline: float) -&gt; _Action:
+        if _should_keep_alive(ctx):
+            if time.monotonic() &gt; deadline:
+                return _Action.ERROR_TIMEOUT
+            return _Action.KEEP_ALIVE
+        return _Action.FINISH
+</code></pre>
+<p>_should_keep_alive 方法为：</p>
+<pre><code class="language-python">def _should_keep_alive(ctx: _RendezvousContext) -&gt; bool:
+    """Determines whether a keep-alive heartbeat should be sent."""
+    try:
+        last_heartbeat = ctx.state.last_heartbeats[ctx.node]
+    except KeyError:
+        return False
+
+    return last_heartbeat &lt;= datetime.utcnow() - ctx.settings.keep_alive_interval
+</code></pre>
+<h5 id="3212-定期调用">3.2.1.2 定期调用</h5>
+<p>这里要注意的是，因为做任何算子之前，都要调用 sync 操作，而 sync 会在 node 之间同步状态，因为心跳是定期的，所以同步状态也是定期的。</p>
+<p><strong>DynamicRendezvousHandler</strong> 之中会启动一个timer，<strong>定期调用</strong>_keep_alive_weak方法。</p>
+<pre><code class="language-python">def _start_heartbeats(self) -&gt; None:
+    self._keep_alive_timer = _PeriodicTimer(
+        self._settings.keep_alive_interval, self._keep_alive_weak, weakref.ref(self)
+    )
+
+    self._keep_alive_timer.set_name(f"RendezvousKeepAliveTimer_{self._this_node.local_id}")
+    self._keep_alive_timer.start()
+</code></pre>
+<p>其次，<code>_keep_alive_weak</code> 会调用 <code>self._keep_alive()</code>。</p>
+<pre><code class="language-python">@staticmethod
+def _keep_alive_weak(weak_self) -&gt; None:
+    self = weak_self()
+    if self is not None:
+        self._keep_alive()
+</code></pre>
+<p>_keep_alive 会调用 _RendezvousKeepAliveOp。</p>
+<pre><code class="language-python">def _keep_alive(self) -&gt; None:
+    self._heartbeat_lock.acquire()
+    op = _RendezvousKeepAliveOp()
+    deadline = self._get_deadline(self._settings.timeout.heartbeat)
+
+    try:
+        self._op_executor.run(op, deadline)
+        msg = (
+            f"The node '{self._this_node}' has sent a keep-alive heartbeat to the rendezvous "
+            f"'{self._settings.run_id}'."
+        )
+        self._record(message=msg)
+        log.debug(msg)
+    except RendezvousError as ex:
+        msg = (
+            f"The node '{self._this_node}' has failed to send a keep-alive heartbeat to the "
+            f"rendezvous '{self._settings.run_id}' due to an error of type {type(ex).__name__}."
+        )
+        self._record(message=msg, node_state=NodeState.FAILED)
+    finally:
+        self._heartbeat_lock.release()
+</code></pre>
+<h5 id="3212-设置心跳">3.2.1.2 设置心跳</h5>
+<p>另外，_DistributedRendezvousOpExecutor 有一个 _keep_alive <u>同名函数</u>，是用来实现内部逻辑，我们后续会讲到。</p>
+<h4 id="322-关闭">3.2.2 关闭</h4>
+<p>_RendezvousCloseOp 会依据当前状态和时间来确定下一步Action。</p>
+<pre><code class="language-python">class _RendezvousCloseOp:
+    """Represents a rendezvous close operation."""
+
+    def __call__(self, ctx: _RendezvousContext, deadline: float) -&gt; _Action:
+        if ctx.state.closed:
+            return _Action.FINISH
+        if time.monotonic() &gt; deadline:
+            return _Action.ERROR_TIMEOUT
+        return _Action.MARK_RENDEZVOUS_CLOSED
+</code></pre>
+<h4 id="323-结束">3.2.3 结束</h4>
+<p>_RendezvousExitOp 依据当前状态和时间来确定下一步Action。如果本Node不在participants之中，不处理。否则返回一个从 participants 列表删除的下一步Action。如果超时则返回对应Action。</p>
+<pre><code class="language-python">class _RendezvousExitOp:
+    """Represents a rendezvous exit operation."""
+
+    def __call__(self, ctx: _RendezvousContext, deadline: float) -&gt; _Action:
+        if ctx.node in ctx.state.participants:
+            if time.monotonic() &gt; deadline:
+                return _Action.ERROR_TIMEOUT
+            return _Action.REMOVE_FROM_PARTICIPANTS
+        return _Action.FINISH
+</code></pre>
+<h4 id="324-join">3.2.4 Join</h4>
+<p>_RendezvousJoinOp 这里依据系统状态不同，做不同处理，比如试图把本Node加入到participant，或者 waiting list，或者继续等待，具体可以参见代码注释。</p>
+<ul>
+<li>从上下文之中提取 _RendezvousState 状态，把结果存放在 state 之中。</li>
+<li>如果状态是closed，则说明此时rendezvous已经结束，则返回_Action.ERROR_CLOSED。</li>
+<li>看看是不是参与者，把结果存放在is_participant。</li>
+<li><u>如果状态已经结束，且本节点已经是参与者</u>，则说明 rendezvous 可以结束，返回 _Action.FINISH。</li>
+<li>获取当前时间 now。</li>
+<li>如果 now &gt; deadline，说明已经超时。
+<ul>
+<li>如果还有时间做 rollback，说明本节点要返回之前的状态。
+<ul>
+<li>如果本节点已经是参与者，说明此时总节点数目没有达到 min，虽然已经是参与者，但是需要从参与者列表移除，所以返回 _Action.REMOVE_FROM_PARTICIPANTS。</li>
+<li>如果本节点在等待列表之中，说明此时总节点数目没有达到 max，虽然在等待列表之中，但是需要从等待列表移除，所以返回_Action.REMOVE_FROM_WAIT_LIST。</li>
+</ul>
+</li>
+<li>否则返回_Action.ERROR_TIMEOUT。</li>
+</ul>
+</li>
+<li>否则没有超时，继续处理。
+<ul>
+<li>如果state.complete 并且本节点不是参与者（如果节点是参与者，前面已经处理过了），说明rendezvous 已经结束，如果还没有达到最大节点数目，并且当前node不在等待列表之中，就需要添加到等待节点列表，等待下次监控周期到的时候，重新做rendezvous，就可以把等待列表中的节点加入到参与列表之中。所以返回_Action.ADD_TO_WAIT_LIST。</li>
+<li>如果本节点是参与者并且state不是complete状态（如果是complete状态，前面已经处理过了），如果已经达到了最小节点数 &amp; 已经超时了，则说明rendezvous 已经结束，则返回_Action.MARK_RENDEZVOUS_COMPLETE。</li>
+<li>否则说明没结束，本节点也不是参与者，则直接加入到参与者列表，返回_Action.ADD_TO_PARTICIPANTS。</li>
+</ul>
+</li>
+<li>如果需要保持心跳，就返回 _Action.KEEP_ALIVE。</li>
+<li>否则返回_Action.SYNC。</li>
+</ul>
+<pre><code class="language-python">class _RendezvousJoinOp:
+    """Represents a rendezvous join operation."""
+
+    def __call__(self, ctx: _RendezvousContext, deadline: float) -&gt; _Action:
+        state = ctx.state # 从上下文之中提取 _RendezvousState 状态
+
+        # A closed rendezvous means that it no longer accepts new nodes.
+        if state.closed:
+            return _Action.ERROR_CLOSED # 如果已经结束，就返回 _Action.ERROR_CLOSED
+
+        is_participant = ctx.node in state.participants # 看看是不是参与者
+
+        # If we are part of the rendezvous and it is already complete there is
+        # no further action to take.
+        if state.complete and is_participant: # 如果是参与者且状态是结束，就返回 _Action.FINISH
+            return _Action.FINISH
+
+        now = time.monotonic()
+        if now &gt; deadline: # 如果已经超时
+            rollback_period = 5  # 5 seconds
+
+            # If we still have time to rollback (a short period on top of the
+            # operation deadline), try to remove ourself from the rendezvous.
+            # It is okay if we can't though as our keep-alive will eventually
+            # expire.
+            if now &lt;= deadline + rollback_period: # 如果还有时间来 rollback
+                # If we are part of the rendezvous, it means we couldn't find
+                # enough participants to complete it on time.
+                if is_participant: # 此时尚未达到min，虽然已经是参与者，但是需要移除
+                    return _Action.REMOVE_FROM_PARTICIPANTS # 需要从参与者列表移除
+                # If we are in the wait list, it means we couldn't wait till the
+                # next round of the rendezvous.
+                if ctx.node in state.wait_list: # 此时已经达到 max，虽然已经在等待列表之中，需要移除
+                    return _Action.REMOVE_FROM_WAIT_LIST # 需要从等待列表移除
+            return _Action.ERROR_TIMEOUT # 返回超时
+
+        if state.complete: # 如果 rendezvous 已经结束
+            # If we are here, it means we are not part of the rendezvous. In
+            # case the rendezvous has capacity for additional participants add
+            # ourself to the wait list for the next round.
+            if len(state.participants) &lt; ctx.settings.max_nodes: # 如果还没有达到最大节点数
+                if ctx.node not in state.wait_list: # 如果当前node不在等待列表之中
+                    return _Action.ADD_TO_WAIT_LIST # 就加入到等待列表，发送一个等待action
+        elif is_participant: # 如果已经在参与者列表
+            # If the rendezvous has enough number of participants including us,
+            # check whether we have passed the rendezvous deadline. If yes,
+            # complete it.
+            if len(state.participants) &gt;= ctx.settings.min_nodes: # 如果达到了最小节点数
+                if cast(datetime, state.deadline) &lt; datetime.utcnow(): # 如果达到了超时
+                    return _Action.MARK_RENDEZVOUS_COMPLETE # 标示 rendezvous 已经结束
+        else: # 否则就直接加入到参与者
+            # The rendezvous is not complete yet and we are not part of it. Try
+            # to join.
+            return _Action.ADD_TO_PARTICIPANTS
+
+        if _should_keep_alive(ctx): # 如果需要保持心跳，就返回 _Action.KEEP_ALIVE
+            return _Action.KEEP_ALIVE
+
+        # At this point either the rendezvous is not complete, but we are part
+        # of it, which means we have to wait for other participants to join; or
+        # the rendezvous is complete, but we are not part of it, which means we
+        # have to wait for the next round.
+        return _Action.SYNC # 否则返回同步状态 _Action.SYNC
+</code></pre>
+<p>具体逻辑如下：</p>
+<pre><code class="language-python">                           state.closed
+                        +--------------------------&gt;   _Action.ERROR_CLOSED
+                        |
+                        |
+                        |  complete &amp; participant
+                        +--------------------------&gt;   _Action.FINISH
+                        |
+                        |
+                        |  timeout &amp; participant
+                        +--------------------------&gt;   _Action.REMOVE_FROM_PARTICIPANTS
+                        |
+                        |
+                        |  timeout &amp; wait
+                        +--------------------------&gt;   _Action.REMOVE_FROM_WAIT_LIST
+                        |
++-------------------+   |
+|                   |   |  timeout
+| _RendezvousJoinOp +------------------------------&gt;   _Action.ERROR_TIMEOUT
+|                   |   |
++-------------------+   |  complete &amp; &lt; max &amp; not wait
+                        |
+                        +--------------------------&gt;   _Action.ADD_TO_WAIT_LIST
+                        |
+                        |  complete &amp; participant &amp; &gt; min &amp; deadline
+                        |
+                        +--------------------------&gt;   _Action.MARK_RENDEZVOUS_COMPLETE
+                        |
+                        |  not complete &amp; not participant
+                        |
+                        +--------------------------&gt;   _Action.ADD_TO_PARTICIPANTS
+                        |
+                        |  _should_keep_alive
+                        |
+                        +--------------------------&gt;   _Action.KEEP_ALIVE
+                        |
+                        |  else
+                        |
+                        +--------------------------&gt;   _Action.SYNC
+
+</code></pre>
+<p>以下是源码之中 ETCD 后端 Rendezvous 状态描述图，我们可以大致参考比对 c10d的状态。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202112/1850883-20211228094204359-156577032.png" alt="" loading="lazy"></p>
+<p>可见，etcd 后端的Join可以分为4个阶段：</p>
+<ul>
+<li>setup 阶段，会往固定目录写一个值，这是一个排他锁，如果写失败，说明目前正有一个 <code>rendezvous</code> 过程在进行中。</li>
+<li>join（joinable） 阶段。如果写值成功，则进入join 阶段。如果在等待时间结束或者参与训练的节点达到了最大值，则进入 frozen 阶段。</li>
+<li>frozen（confirm）阶段。需要所有节点都确认，进入最后的 final 阶段。</li>
+<li>final 阶段。分配rank，<code>RANK 0</code> 的实例成为 master。</li>
+</ul>
+<p>仿照上图，我们把 c10d 拓展如下。</p>
+<pre><code class="language-python">      +
+      |
+      |
+      v
++-----+------+
+|            |
+|   closed   +---------------&gt; ERROR_CLOSED
+|            |
++-----+------+
+      |
+      |
+      v
++-----+------+  is_participant
+|            |
+|  complete  +---------------&gt; FINISH
+|            |
++-----+------+
+      |                                                                                 is_participant
+      |
+      v                                                                                +----&gt; REMOVE_FROM_PARTICIPANTS
++-----+-------+  now &gt; deadline  +-----------+    now &lt; rollback     +-----------+     |
+|             |                  |           |                       |           |     |
+|    join     +----------------&gt; |  timeout  +----------------------&gt;+ rollback  +-----+
+|             |                  |           |                       |           |     |
++-----+-------+                  +----+------+                       +-----------+     |
+      |                               |                                                | in state.wait_list
+      |                               |    now &gt; rollback                              |
+      |  now &lt; deadline               |                                                +----&gt; REMOVE_FROM_WAIT_LIST
+      |                               +----------&gt;  ERROR_TIMEOUT
+      |
+      |   complete &amp;&amp; not is_participant &amp;&amp; &lt; max &amp;&amp; not in state.wait_list
+      |
+      +------------------------------------------------------------------&gt;  ADD_TO_WAIT_LIST
+      |
+      |   not complete &amp;&amp; is_participant &amp;&amp; &gt; min &amp;&amp; &gt; deadline
+      |
+      +------------------------------------------------------------------&gt;  MARK_RENDEZVOUS_COMPLETE
+      |
+      |   not complete &amp;&amp; not is_participant
+      |
+      +-----------------------------------------&gt;  ADD_TO_PARTICIPANTS
+      |
+      |   _should_keep_alive
+      |
+      +---------------------------&gt;  KEEP_ALIVE
+      |
+      |
+      v
+     SYNC
+
+</code></pre>
+<p>手机如下：</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202112/1850883-20211228094240231-777949553.png" alt="" loading="lazy"></p>
+<h2 id="0x04-业务操作">0x04 业务操作</h2>
+<p>_DistributedRendezvousOpExecutor.run 的内部就是依据 action 选择不同的业务函数来执行。</p>
+<pre><code class="language-python">            if action == _Action.KEEP_ALIVE:
+                self._keep_alive()
+            elif action == _Action.ADD_TO_PARTICIPANTS:
+                self._add_to_participants()
+            elif action == _Action.ADD_TO_WAIT_LIST:
+                self._add_to_wait_list()
+            elif action == _Action.REMOVE_FROM_PARTICIPANTS:
+                self._remove_from_participants()
+            elif action == _Action.REMOVE_FROM_WAIT_LIST:
+                self._remove_from_wait_list()
+            elif action == _Action.MARK_RENDEZVOUS_COMPLETE:
+                self._mark_rendezvous_complete()
+            elif action == _Action.MARK_RENDEZVOUS_CLOSED:
+                self._mark_rendezvous_closed()
+</code></pre>
+<p>我们接下来就看看具体这些内部函数逻辑。</p>
+<h3 id="41-加入参与者">4.1 加入参与者</h3>
+<p>接受到 ADD_TO_PARTICIPANTS 之后，调用 _add_to_participants 从等待列表中移除节点，往 participants 加入这个节点。</p>
+<pre><code class="language-python">    def _add_to_participants(self) -&gt; None:
+
+        state = self._state
+
+        try:
+            state.wait_list.remove(self._node)
+        except KeyError:
+            pass
+
+        # The ranks of the participants will be set once the rendezvous is
+        # complete.
+        state.participants[self._node] = 0
+
+        self._keep_alive()
+
+        if len(state.participants) == self._settings.min_nodes:
+            state.deadline = datetime.utcnow() + self._settings.timeout.last_call
+
+        if len(state.participants) == self._settings.max_nodes:
+            self._mark_rendezvous_complete()
+</code></pre>
+<h3 id="42-移除参与者">4.2 移除参与者</h3>
+<p>接受到 REMOVE_FROM_PARTICIPANTS  之后，调用 _remove_from_participants 从 participants 和 last_heartbeats 中删除参与者。</p>
+<pre><code class="language-python">    def _remove_from_participants(self) -&gt; None:
+
+        state = self._state
+        del state.participants[self._node]
+        del state.last_heartbeats[self._node]
+
+        if state.complete:
+            # If we do not have any participants left, move to the next round.
+            if not state.participants:
+                state.complete = False
+                state.round += 1
+        else:
+            if len(state.participants) &lt; self._settings.min_nodes:
+                state.deadline = None
+</code></pre>
+<h3 id="43-加入等待序列">4.3 加入等待序列</h3>
+<p>接受到 ADD_TO_WAIT_LIST 之后，调用 _add_to_wait_list 网 wait_list 中加入节点。</p>
+<pre><code class="language-python">    def _add_to_wait_list(self) -&gt; None:
+        self._state.wait_list.add(self._node)
+        self._keep_alive()
+</code></pre>
+<h3 id="44-移除等待序列">4.4 移除等待序列</h3>
+<p>接受到 REMOVE_FROM_WAIT_LIST 之后，调用 _remove_from_wait_list 从 wait_list 移除节点。</p>
+<pre><code class="language-python">    def _remove_from_wait_list(self) -&gt; None:
+        self._state.wait_list.remove(self._node)
+        del self._state.last_heartbeats[self._node]
+</code></pre>
+<h3 id="45-设置结束">4.5 设置结束</h3>
+<p>接受到 MARK_RENDEZVOUS_COMPLETE 之后，当 rendezvous 聚合操作结束之后，给每一个参与者设置 rank。</p>
+<p>每个节点上都是按照同样算法排序，所以rank在每个节点上都是一样的。</p>
+<pre><code class="language-python">    def _mark_rendezvous_complete(self) -&gt; None:
+        state = self._state
+
+        state.complete = True
+        state.deadline = None
+
+        # Assign the ranks.
+        for rank, node in enumerate(sorted(state.participants)):
+            state.participants[node] = rank
+
+    def _mark_rendezvous_closed(self) -&gt; None:
+        self._state.closed = True
+</code></pre>
+<h3 id="46-心跳">4.6 心跳</h3>
+<p>接收到 KEEP_ALIVE action之后，会调用到 _keep_alive 来维持心跳。另外，keep_alive 也会在 _add_to_participants等方法内被调用，会更新本地state之中的last heartbeats，下一次 sync 时候，会把 last_heartbeats 写入键值存储，这样其他Node就可以知道这个节点的状态了。而本地则会在 _sanitize 之中依据 last_heartbeats 做处理，我们之前提到过。</p>
+<pre><code class="language-python">def _keep_alive(self) -&gt; None:
+    msg = (
+        f"The node '{self._node}' updated its keep-alive heartbeat time for the rendezvous "
+        f"'{self._settings.run_id}'. Pending sync."
+    )
+    self._record(message=msg)
+    self._state.last_heartbeats[self._node] = datetime.utcnow()
+</code></pre>
+<p>_record 方法如下：</p>
+<pre><code class="language-python">def _record(self, message: str, node_state: NodeState = NodeState.RUNNING) -&gt; None:
+    construct_and_record_rdzv_event(
+        name=f"{self.__class__.__name__}.{get_method_name()}",
+        run_id=self._settings.run_id,
+        message=message,
+        node_state=node_state,
+        hostname=self._node.fqdn,
+        pid=self._node.pid,
+        local_id=self._node.local_id,
+    )
+</code></pre>
+<p>其就是调用如下代码记录log。</p>
+<pre><code class="language-python">def record_rdzv_event(event: RdzvEvent) -&gt; None:
+    _get_or_create_logger("dynamic_rendezvous").info(event.serialize())
+
+def construct_and_record_rdzv_event(
+    run_id: str,
+    message: str,
+    node_state: NodeState,
+    name: str = "",
+    hostname: str = "",
+    pid: Optional[int] = None,
+    master_endpoint: str = "",
+    local_id: Optional[int] = None,
+    rank: Optional[int] = None,
+) -&gt; None:
+    # We don't want to perform an extra computation if not needed.
+    if isinstance(get_logging_handler("dynamic_rendezvous"), logging.NullHandler):
+        return
+
+    # Set up parameters.
+    if not hostname:
+        hostname = socket.getfqdn()
+    if not pid:
+        pid = os.getpid()
+
+    # Determines which file called this function.
+    callstack = inspect.stack()
+    filename = "no_file"
+    if len(callstack) &gt; 1:
+        stack_depth_1 = callstack[1]
+        filename = os.path.basename(stack_depth_1.filename)
+        if not name:
+            name = stack_depth_1.function
+
+    # Delete the callstack variable. If kept, this can mess with python's
+    # garbage collector as we are holding on to stack frame information in
+    # the inspect module.
+    del callstack
+
+    # Set up error trace if this is an exception
+    if node_state == NodeState.FAILED:
+        error_trace = traceback.format_exc()
+    else:
+        error_trace = ""
+
+    # Initialize event object
+    event = RdzvEvent(
+        name=f"{filename}:{name}",
+        run_id=run_id,
+        message=message,
+        hostname=hostname,
+        pid=pid,
+        node_state=node_state,
+        master_endpoint=master_endpoint,
+        rank=rank,
+        local_id=local_id,
+        error_trace=error_trace,
+    )
+
+    # Finally, record the event.
+    record_rdzv_event(event)
+</code></pre>
+<p>至此，引擎部分也已经分析完毕，下一篇我们看看是否可以从整体角度再做一下全面梳理。</p>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15718043.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(1) --- 总体思路</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15725911.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(2)---启动&amp;单节点流程</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15728861.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(3)---代理</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15735170.html" target="_blank">源码解析] PyTorch 分布式之弹性训练(4)---Rendezvous 架构和逻辑</a></p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1228.2911219233101" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2021-12-28 09:55">2021-12-28 09:55</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">1708</span>)&nbsp;
+评论(<span id="post_comment_count">0</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15739391);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15739391', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15739391.html', title: '[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15739391, cb_entryCreatedDate = '2021-12-28 09:55', cb_postType = 1, cb_postTitle = '[源码解析] PyTorch 分布式之弹性训练(5)---Rendezvous 引擎';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-豆包')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201072501456-2052907165.jpg" onload="countCreativeImpressions('C1-字节-豆包')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDorLfscdTebAiRCPoXnt3HJpQpTpJ6cFY942srknAPJlDidarpT1Innrh76FqjngdWzJm3be4oGcFVz7Q0B6sQJgn1BiJyPbu36h5C7T2W-59ARKCsrWvHUk3XXjY9EAfE" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

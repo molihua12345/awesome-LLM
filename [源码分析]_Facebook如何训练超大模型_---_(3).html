@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型。前文我们介绍了 FSDP 如何使用，本文从源码角度来介绍 FSDP 如何实现 offload。" />
+    <meta property="og:description" content="FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型。前文我们介绍了 FSDP 如何使用，本文从源码角度来介绍 FSDP 如何实现 offload。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码分析] Facebook如何训练超大模型 --- (3) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15824699.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15824699.html",
+      "headline": "[源码分析] Facebook如何训练超大模型 --- (3)",
+      "description": "[源码分析] Facebook如何训练超大模型 (3) 0x00 摘要 我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。 而FSDP（Fully Sharded Dat",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-21T14:35:00.0000000&#x2B;08:00",
+      "dateModified": "2022-04-08T11:47:00.0000000&#x2B;08:00",
+      "wordCount": "25891",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15824699;
+            window.currentPostDateAdded = '2022-01-21 14:35';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15824699.html" title="发布于 2022-01-21 14:35">
+    <span role="heading" aria-level="2">[源码分析] Facebook如何训练超大模型 --- (3)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型。前文我们介绍了 FSDP 如何使用，本文从源码角度来介绍 FSDP 如何实现 offload。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码分析-facebook如何训练超大模型-----3">[源码分析] Facebook如何训练超大模型 --- (3)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码分析-facebook如何训练超大模型-----3" rel="noopener nofollow">[源码分析] Facebook如何训练超大模型 --- (3)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-zero-offload" rel="noopener nofollow">0x01 ZeRO-Offload</a><ul><li><a href="#11-设计原则" rel="noopener nofollow">1.1 设计原则</a></li><li><a href="#12-zero" rel="noopener nofollow">1.2 ZeRO</a></li></ul></li><li><a href="#0x02-卸载策略" rel="noopener nofollow">0x02 卸载策略</a><ul><li><a href="#21-数据流图" rel="noopener nofollow">2.1 数据流图</a></li><li><a href="#22-限制cpu计算" rel="noopener nofollow">2.2 限制CPU计算</a></li><li><a href="#23-最小化通信量" rel="noopener nofollow">2.3 最小化通信量</a></li><li><a href="#24-最大化内存节约" rel="noopener nofollow">2.4 最大化内存节约</a></li><li><a href="#25-唯一最优化策略" rel="noopener nofollow">2.5 唯一最优化策略</a></li><li><a href="#26-zero-offload-schedule" rel="noopener nofollow">2.6 ZeRO-Offload Schedule</a><ul><li><a href="#261-单机计划" rel="noopener nofollow">2.6.1 单机计划</a></li><li><a href="#262-多节点计划" rel="noopener nofollow">2.6.2 多节点计划</a></li></ul></li></ul></li><li><a href="#0x03-fairscale-offload-使用" rel="noopener nofollow">0x03 FairScale Offload 使用</a><ul><li><a href="#31-思路" rel="noopener nofollow">3.1 思路</a></li><li><a href="#32-使用" rel="noopener nofollow">3.2 使用</a></li><li><a href="#33-配置" rel="noopener nofollow">3.3 配置</a></li></ul></li><li><a href="#0x04-源码" rel="noopener nofollow">0x04 源码</a><ul><li><a href="#41-构建" rel="noopener nofollow">4.1 构建</a><ul><li><a href="#411-初始化" rel="noopener nofollow">4.1.1 初始化</a></li><li><a href="#412-切片" rel="noopener nofollow">4.1.2 切片</a></li></ul></li><li><a href="#42-modelshard" rel="noopener nofollow">4.2 ModelShard</a><ul><li><a href="#421-定义" rel="noopener nofollow">4.2.1 定义</a></li><li><a href="#422-功能函数" rel="noopener nofollow">4.2.2 功能函数</a></li></ul></li><li><a href="#43-前向传播" rel="noopener nofollow">4.3 前向传播</a><ul><li><a href="#431-前向传播" rel="noopener nofollow">4.3.1 前向传播</a></li><li><a href="#432-hook" rel="noopener nofollow">4.3.2 Hook</a></li></ul></li></ul></li><li><a href="#0xff" rel="noopener nofollow">0xFF</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。</p>
+<p>而FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。Parameter sharding 就是把模型参数等切分到各个GPU之上。我们会以 Google，微软和 Facebook 的论文，博客以及代码来进行学习分析。</p>
+<p>前文我们介绍了 FSDP 如何实现参数分区，FSDP 也会和Offload一起使用，这两项加起来就是ZeRO-offload的实现。本文基于原始论文 <a href="https://arxiv.org/pdf/2101.06840.pdf%EF%BC%8C%E5%AE%98%E5%8D%9Ahttps://www.deepspeed.ai/tutorials/zero-offload/" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2101.06840.pdf，官博https://www.deepspeed.ai/tutorials/zero-offload/</a> 和源码来一起分析学习。</p>
+<p>本系列其他文章如下：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15782054.html" target="_blank">源码解析] PyTorch 分布式之 ZeroRedundancyOptimizer</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15785669.html" target="_blank">论文翻译] 分布式训练 Parameter sharding 之 ZeRO</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15795044.html" target="_blank">论文翻译] 分布式训练 Parameter Sharding 之 Google Weight Sharding</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15815013.html" target="_blank">源码分析] Facebook如何训练超大模型---(1)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15819817.html" target="_blank">源码分析] Facebook如何训练超大模型 --- (2)</a></p>
+<h2 id="0x01-zero-offload">0x01 ZeRO-Offload</h2>
+<p>基于 Zero Redundancy Optimizer 基础之上，加利福尼亚大学默塞德分校和微软的一组研究人员开发了 ZeRO-Offload。ZeRO-Offload 通过同时利用GPU和宿主机 CPU 的计算和存储资源，提升了在较少 GPU 资源下可以高效训练的模型规模。</p>
+<p><u>ZeRO-Offload 核心技术是在 ZeRO-2基础之上将优化器状态和梯度卸至 CPU 内存</u>。优化器状态在整个训练过程中将消耗大部分 GPU 显存，反向传播过程中计算出来的梯度也占据了相当的显存，把他们移到CPU，这样尽管存在拷贝至 CPU 的开销，但是节省的 GPU 显存可用于训练更大的模型，GPU 计算效率仍然可以提高。</p>
+<h3 id="11-设计原则">1.1 设计原则</h3>
+<p>ZeRO-offload 属于CPU卸载技术，就是当GPU内存已满时，可以将暂时未使用的数据卸载到CPU，并在以后需要时将其读回（Rhu等人，2016）。ZeRO-offload 基于三个原则来设计：效率、可伸缩性和可用性。其背后的关键技术是：在 ZeRO-2 基础上将优化器计算，优化器状态和梯度卸载到 CPU 内存。这种方法让 ZeRO-Offload 能最大程度降低拷贝至 CPU 导致的计算效率损失，同时还实现了与原始ZeRO-2相同的效率，有时甚至更好。研究人员已经可以确定 CPU 和 GPU 之间数据分区和最佳计算策略。该方法涉及到的流程包括如何将梯度、优化器状态和优化器计算分散到 GPU，以及如何在 GPU 上进行向前和向后计算。</p>
+<p>下图展示了 Zero-OffLoad 的架构：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119233824393-257729053.png" alt="" loading="lazy"></p>
+<p>ZeRO-Offload 概述，图来自 <a href="https://www.microsoft.com/en-us/research/blog/deepspeed-extreme-scale-model-training-for-everyone/" target="_blank" rel="noopener nofollow">https://www.microsoft.com/en-us/research/blog/deepspeed-extreme-scale-model-training-for-everyone/</a></p>
+<h3 id="12-zero">1.2 ZeRO</h3>
+<p>ZeRO-Offload与ZeRO一起工作，可将DL训练扩展到多个GPU。ZeRO有三个阶段，分别对应于三种不同的划分：模型状态、优化器状态、梯度和参数的划分，分别为ZeRO-1、ZeRO-2和ZeRO-3。</p>
+<ul>
+<li>ZeRO-1只对优化器状态进行分区。</li>
+<li>ZeRO-2除了对优化器状态进行分区外，还对梯度进行分区，</li>
+<li>ZeRO-3对所有模型状态进行分区。</li>
+</ul>
+<p>ZeRO-Offload 与ZeRO-2协同工作，因此我们将对其进行进一步讨论。</p>
+<p>在ZeRO-2中，每个GPU都存储了所有参数的副本，但在每个训练步骤结束时的参数更新中，只更新其中自己GPU负责的部分。由于每个GPU只更新一部分参数，它们只存储进行更新所需的优化器状态和梯度。在更新之后，每个GPU使用一个all-gather通信将其更新参数的部分发送给所有其他GPU。ZeRO-2的计算和通信具体描述如下。</p>
+<ul>
+<li>在前向传播过程中，每个GPU计算不同mini-batch的损失。</li>
+<li>在后向传播过程中，当计算出每个梯度之后，在拥有该梯度或部分梯度的GPU/GPU上会使用reduce算子对该梯度进行平均化。</li>
+<li>在后向传播完成之后，每个GPU使用平均梯度来更新其部分参数和优化器状态。</li>
+<li>更新之后，会进行一次all-gather以接收在其他GPU上计算的其余参数更新。</li>
+</ul>
+<p>下面就让我们研读一下论文内容。</p>
+<h2 id="0x02-卸载策略">0x02 卸载策略</h2>
+<p>ZeRO-Offload旨在通过在训练期间将一些模型状态从GPU卸载到CPU内存，从而在单个或多个GPU上实现高效的大型模型训练。</p>
+<p>如前所述，模型状态：参数、梯度和优化器状态，是大型模型训练中内存瓶颈的主要来源。通过将这些模型状态的一部分卸载到CPU，ZeRO-Offload可以训练更大的模型。然而，确定最佳的卸载策略并非易事。有许多方法可以将模型状态卸载到CPU内存中，每一种方法在CPU计算和GPU-CPU通信方面有不同的权衡。</p>
+<p>为了确定最佳的卸载策略，ZeRO-Offload将DL训练模拟成数据流图，并使用第一原理来在CPU和GPU设备之间对这个图进行有效地划分。ZeRO-Offload在三个关键方面对图进行了优化：</p>
+<ul>
+<li>
+<p>i）只在CPU上进行少量计算，以防止CPU成为性能瓶颈。和GPU相比，CPU的计算量是数量级减少。</p>
+</li>
+<li>
+<p>ii）确保CPU和GPU内存之间的通信量最小；</p>
+</li>
+<li>
+<p>iii）在实现最小通信量的同时，它可以最大限度地节省内存。</p>
+</li>
+</ul>
+<p>事实上，ZeRO-Offload可以在训练过程中实现与非卸载训练相媲美的高效率，而且它是<em>独特的最佳（unique optimal）</em>，这意味着没有其他解决方案可以在不增加通信量或增加CPU计算的情况下提供更好的内存节省。</p>
+<p>接下来将讨论独特最优卸载策略的推导，该策略是专门为<em>混合精度训练与Adam优化器</em>设计的。</p>
+<h3 id="21-数据流图">2.1 数据流图</h3>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119233838759-1907093018.png" alt="" loading="lazy"></p>
+<p>DL训练的工作量可以表示为数据和计算的加权有向图，如图所示，其中圆形节点代表模型状态（参数16，梯度16，参数32，动量32，方差32），矩形节点代表计算（向前、向后、参数更新）。图中的边代表节点之间的数据流，边的权重是在任何给定的训练迭代期间流经它的总数据量（以字节为单位）。对于一个有M个参数的模型，在源节点产生fp16模型状态的情况下，该图中的边的权重为2M，或者在源节点产生fp32模型状态的情况下为4M。</p>
+<p>GPU和CPU之间的卸载策略可以用这个图的双向分区来表示，比如分区中的计算节点将在拥有该分区的设备上执行，而该分区中的数据节点将存储在拥有该分区的设备上。GPU和CPU之间必须通信的总数据量由两个分区上运行的边的权重给出。有许多方法可以对该图进行分区。比如可以使用第一原理简化数据流图，以减少基于三个不同效率指标的可能选择的数量：i）CPU计算量开销，ii）通信开销，以及iii）内存节省。</p>
+<h3 id="22-限制cpu计算">2.2 限制CPU计算</h3>
+<p>CPU计算吞吐量比GPU计算吞吐量慢多个数量级。因此，将大型计算图卸载到CPU将严重限制训练效率。因此，我们必须避免将计算密集型组件卸载到CPU上。</p>
+<p>DL训练每个迭代的计算复杂度通常由<em>O</em>(<em>MB</em>)给出，其中<em>M</em>是模型大小，<em>B</em>是有效batch size。为了避免CPU计算成为瓶颈，只有那些计算复杂度低于<em>O</em>(<em>MB</em>)的计算才应该卸载到CPU上。这意味着计算复杂度为<em>O</em>(<em>MB</em>)的前向传播和后向传播必须在GPU上完成，而复杂度为<em>O</em>(<em>MB</em>)的剩余计算（如范数计算、权重更新等）可能会卸载到CPU上。</p>
+<p>基于这个简单的观察，我们将数据流图中的前向和后向节点融合为一个超级节点（FWD-BWD），并将其分配到GPU上。</p>
+<h3 id="23-最小化通信量">2.3 最小化通信量</h3>
+<p>我们接下来分析最小化通信量（Minimizing Communication Volume）。</p>
+<p>CPU内存带宽至少比CPU和GPU之间的PCI-E带宽快一个数量级，而GPU内存比CPU内存快一个数量级。因此，我们必须最小化CPU和GPU内存之间的通信量，以防止PCI-E带宽成为训练性能瓶颈。为此，我们必须首先确定模型状态卸载策略的理论最小通信量。</p>
+<p>模型状态卸载策略的最小通信量为4M（<em>M</em>是模型大小）。请注意，在将前向和后向融合为单个超级节点后，数据流图中的每个节点都是一个循环的一部分。因此，此图的任何分区都需要在至少两条边上做切割。每条边的权重至少为2M，导致总通信量至少为4M。</p>
+<p>如果我们选择将通信量限制在这个最小值，我们可以大大简化数据流图，并将分区策略的数量减少到较少数量。</p>
+<p><strong>创建fp32超级节点</strong>：请注意，任何不将fp32模型放在同一位置的分区策略都表明其生产者和消费者节点无法实现4<em>M</em>的最小通信量。这样的分区必须在至少在如下两条边上切分：一条权重为4<em>M</em>的边和另一条至少2M的边，从而产生至少6<em>M</em>的通信量。因此，为了实现最小通信量，所有卸载策略必须将fp32模型状态与其生产者和消费者算子放在一起，即fp32模型状态（动量32、方差32和p32）必须与<em>Param Update</em>和 <em>float2half</em> 计算放在同一位置。</p>
+<p>此约束允许我们将数据流图中的所有上述fp32数据和计算节点视为一个超级节点，我们称之为<em>Update super</em>。我们在图2中展示了这个简化的数据流图，它仅由四个节点组成：<em>FWD-BWD超级</em>节点、<em>p16</em>数据节点、<em>g16</em>数据节点和<em>更新超级</em>节点。</p>
+<p><strong>p16分配</strong>：为了实现最小通信量，<em>p16</em>必须与<em>FWD-BWD Super</em>位于同一位置，因为这两个节点之间的边缘权重为4<em>M</em>。如果这两个节点分开，通信量将会增加到6<em>M</em>（4<em>M</em>+2<em>M</em>）。由于我们已经将节点<em>FWD-BWD Super</em>分配给GPU以限制CPU上的计算，<em>p16</em>也必须分配给GPU。</p>
+<h3 id="24-最大化内存节约">2.4 最大化内存节约</h3>
+<p>我们接下来看看如何最大化内存节约（Maximizing Memory Savings）。</p>
+<p>在简化数据流图以最小化通信量之后，只剩下<em>g16</em>和<em>Update Super</em>需要被分配。请注意，在这一点上，所有的分区结果都会导致最小的通信量，所以我们可以进一步调整选择，以最大限度地节省GPU的内存。表1显示了所有有效的分区策略所带来的内存节省，这些策略使通信量最小。通过将<em>g16</em>和<em>Update Super</em>卸载到CPU，可以实现8倍的最大内存节省。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119234042841-1931368625.png" alt="" loading="lazy"></p>
+<h3 id="25-唯一最优化策略">2.5 唯一最优化策略</h3>
+<p>ZeRO-Offload在CPU内存中分配所有的fp32模型状态以及fp16梯度，它也在CPU中计算参数更新。fp16的参数保留在GPU上，前向和后向的计算也在GPU上完成。</p>
+<p>我们通过简化我们的数据流图来得出这个卸载策略，并排除了所有其他的分区策略，因为其他策略或者不能限制CPU的计算，或者无法最小化通信量，或无法最大限度地节省内存。因此，ZeRO-Offload不仅在上述指标上是最优的，而且是唯一的；不可能有其他策略能比ZeRO-Offload节省更多的内存，而不增加CPU的计算复杂性或产生额外的GPU-CPU通信量。</p>
+<h3 id="26-zero-offload-schedule">2.6 ZeRO-Offload Schedule</h3>
+<p>在这一节中，我们将讨论基于我们的卸载策略，如何在单GPU系统上实现ZeRO-Offload的具体计算和通信schedule。然后，我们将展示如何通过将我们的卸载策略与ZeRO数据并行和模型并行结合起来，把这个schedule扩展到多GPU系统上有效工作。</p>
+<h4 id="261-单机计划">2.6.1 单机计划</h4>
+<p>ZeRO-2 在每个 GPU 上保存一部分优化器状态量和梯度，ZeRO-Offload 继承了 ZeRO-2 的划分优化器状态量和梯度的方法。和 ZeRO-2 不同之处在于，ZeRO-Offload 把优化器状态量和梯度移到了本机内存上。即，ZeRO-Offload 对数据进行分区，使：</p>
+<ul>
+<li>fp16参数存储在GPU中。</li>
+<li>fp32参数保存在CPU内存中。</li>
+<li>fp16梯度保存在CPU内存中。</li>
+<li>所有优化器状态（如fp32动量、方差）在整体训练过程中都保存在CPU内存中。</li>
+</ul>
+<p>在计算时：</p>
+<ul>
+<li>
+<p>我们首先通过前向传播计算损失。由于fp16参数已在GPU上，因此这部分计算不需要CPU通信。</p>
+</li>
+<li>
+<p>在损失的反向传播过程中，在反向调度的不同点计算不同参数的梯度。</p>
+<ul>
+<li>可以在计算每个参数后立即将这些梯度单独或分组传输到CPU内存。因此，在将梯度传输到CPU内存之前，只需少量内存即可临时保留GPU内存上的梯度。</li>
+<li>每个梯度传输可以与反向图的剩余部分上的反向传播重叠，从而允许ZeRO-Offload隐藏通信成本的重要部分。</li>
+</ul>
+</li>
+<li>
+<p>反向传播后，ZeRO-Offload 直接在CPU上更新fp32参数和剩余优化器状态（如动量和方差），并将更新后的fp32参数从CPU内存复制为GPU内存上的fp16参数。下图以图解的方式显示了ZeRO-Offload的每个步骤中的计算和通信，</p>
+<ul>
+<li>当梯度到了 CPU 之后，划分后的优化状态变量就会并行在 CPU 上进行更新（图中的 <strong>p update</strong>）。</li>
+<li>当更新完成之后，划分后的参数就被移回GPU，接下来会用 all gather 操作进行更新（(图中的 <strong>g swap</strong>）。</li>
+<li>通过使用不同 CUDA stream 来让通信（如 <strong>g offload</strong> 和 <strong>g swap</strong>）和计算（如反向传播和 <strong>p update</strong>) 重叠起来，通信隐藏在计算之中，这样可以提高训练效率。</li>
+</ul>
+</li>
+</ul>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119233939753-1351987473.png" alt="" loading="lazy"></p>
+<p>下图以伪代码的形式显示了具体的计划。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119233951795-320566209.png" alt="" loading="lazy"></p>
+<h4 id="262-多节点计划">2.6.2 多节点计划</h4>
+<p>ZeRO-Offload 可以有效地扩展到数百个GPU。ZeRO-Offload 保留ZeRO Stage-2（优化器状态和梯度分区）的模型状态分区策略，同时将分区的梯度、优化器状态和相应的参数更新卸载到CPU。</p>
+<p>在卸载之前进行分区的主要好处是，对于具有1个以上GPU的系统，每个数据并行进程只负责更新参数的子集。从所有数据并行GPU到CPU的聚合通信量保持不变，而且并行使用CPU资源共同计算单个权重更新。因此，总的CPU更新时间随着数据并行度的增加而减少，</p>
+<p>因为CPU计算资源随着计算节点数量的增加而线性增加。这允许ZeRO-Offload 实现非常好的可伸缩性，因为CPU优化器步骤的减少抵消了跨GPU的通信开销。ZeRO-Offload 在不同的GPU之间划分梯度和优化器状态，每个GPU将其拥有的分区卸载到CPU内存中，并在整个培训过程中保持该分区。</p>
+<p>在反向传播过程中，ZeRO-Offload 使用GPU上的reduce scatter计算并且平均梯度，每个数据并行进程（GPU）仅将属于其分区的平均梯度卸载到CPU内存上（下图中的 g offload）并且把自己不负责的部分丢弃掉。</p>
+<p>一旦梯度在CPU上可用，优化器状态分区将由CPU上的每个数据并行进程并行更新。更新后，参数分区移回GPU，然后在GPU上执行类似于ZeRO-2的all gather操作来收集所有参数。下图显示了ZeRO-Offload 的data placement模型参数、梯度和优化器状态。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119234005818-841023729.png" alt="" loading="lazy"></p>
+<p>ZeRO-Offload数据并行调度的详细信息如代码图所示。上述all gather操作在代码图中显示为一系列广播操作。</p>
+<h2 id="0x03-fairscale-offload-使用">0x03 FairScale Offload 使用</h2>
+<h3 id="31-思路">3.1 思路</h3>
+<p>以下思路结合了FairScale的文档和自己的思考。</p>
+<p>一般来说，大型模型往往会导致OOM错误，而FairScale <code>OffloadModel</code>API使用户能够在有限的GPU资源上训练大型模型，从而实现了大规模分布式训练。<code>OffloadModel</code>支持混合精度训练、可以使用激活检查点减少内存占用，以及使用微批来处理降低通信量。</p>
+<p>FairScale Offload 受到 <code>Layer-to-Layer &lt;https://arxiv.org/abs/2002.05645&gt;</code> 和 <code>Zero-Offload &lt;https://arxiv.org/abs/2101.06840&gt;</code>的深度启发，OffloadModel使用CPU存储整个模型、优化器状态和梯度。OffloadModel然后将一层（或多个层）加载到GPU上，以便在向前和向后传播过程中进行训练。层与层边界的中间激活也存储在CPU上，并根据向后传播的需要复制到GPU。完成后向传播后，模型的所有参数将使用位于CPU上的梯度进行更新，具体可以参见下面的示例图。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220119234021536-71494213.png" alt="" loading="lazy"></p>
+<p>Offload 的执行有一个假定条件：模型假定为nn.Sequential模型，并根据参数数量（几乎）平均分片到nn.Modules 列表之中。每个 nn.Module 现在包含整个模型的一部分，我们称之为模型分片（model shards）。</p>
+<p>在这个假定条件基础之上，Offload 具体采用了以下方法来进行具体实现：</p>
+<ul>
+<li>在每次迭代中，从CPU复制每个模型分片到GPU，然后使用小批量（minibatch）数据计算前向传播，并把模型分片从GPU复制回CPU。在后向传播过程中，重复相同的过程。<u>本文对应了此项具体实现</u>。</li>
+<li>优化器保留在CPU上，在运行optimizer.step之前，梯度和参数都会移动到CPU上。这确保了CPU可以更新参数并保持优化器状态。<strong>优化器部分文章对应了此项具体实现。具体可以参见 self.move_grads_to_cpu 选项</strong>。</li>
+<li>如果启用了激活检查点，我们将使用torch.autograd.Function来禁用FW过程中的计算图构造，并在给定分片的FW过程完成后把中间激活从GPU复制到CPU。BW过程中执行相反复制操作。<u>后续 Activation 文章会讲述此项实现</u>。</li>
+<li>可以使用微批次（Micro-batches）实现更大的吞吐量，并抵消从CPU&lt;-&gt;GPU移动模型参数和激活的成本。微批次技术允许您指定大的小批次，这些小批次被分解为微批次（micro-batches），并在每次迭代时馈送到模型分片。简言之，这是一种允许在给定时间在模型分片之上进行更多计算的方法，以抵消从CPU&lt;-&gt;GPU复制的成本。</li>
+</ul>
+<h3 id="32-使用">3.2 使用</h3>
+<p>具体使用样例如下，首先会进行常规配置，并且定义了一个Sequential模型。</p>
+<pre><code class="language-python">from torch.utils.data.dataloader import DataLoader
+from torchvision.datasets import FakeData
+from torchvision.transforms import ToTensor
+
+# 引入Offload
+from fairscale.experimental.nn.offload import OffloadModel 
+
+# 定义训练配置
+num_inputs = 8
+num_outputs = 8
+num_hidden =  4
+num_layers =  2
+batch_size =  8
+
+# 数据加载
+transform = ToTensor()
+dataloader = DataLoader(
+    FakeData(
+        image_size=(1, num_inputs, num_inputs),
+        num_classes=num_outputs,
+        transform=transform,
+    ),
+    batch_size=batch_size,
+)
+
+# 定义了Sequential模型，注意前面提到的：模型假定为nn.Sequential模型，并根据参数数量（几乎）平均分片到nn.Modules 列表之中。
+model = torch.nn.Sequential(
+    torch.nn.Linear(num_inputs * num_inputs, num_hidden),
+    *([torch.nn.Linear(num_hidden, num_hidden) for _ in range(num_layers)]),
+    torch.nn.Linear(num_hidden, num_outputs),
+)
+</code></pre>
+<p>然后，要使用OffloadModel API，我们应该使用 OffloadModel 来包装模型，包装时，用户可以指定：</p>
+<ul>
+<li>用于计算向前和向后传播的设备。</li>
+<li>模型将存储在其上的offload 设备。</li>
+<li>模型应分片的片数。</li>
+<li>默认情况下，激活检查点处于关闭状态，微批次数为1。</li>
+</ul>
+<pre><code class="language-python">offload_model = OffloadModel( # 使用 OffloadModel 来包装模型
+    model=model, # 原生模型
+    device=torch.device("cuda"), # 用于计算向前和向后传播的设备
+    offload_device=torch.device("cpu"), # 模型将存储在其上的offload 设备
+    num_slices=3, # 模型应分片的片数
+    checkpoint_activation=True,
+    num_microbatches=1,
+)
+
+torch.cuda.set_device(0)
+device = torch.device("cuda")
+
+criterion = torch.nn.CrossEntropyLoss()
+optimizer = torch.optim.SGD(offload_model.parameters(), lr=0.001) # 使用OffloadModel
+
+# To train 1 epoch.
+offload_model.train() # 使用 OffloadModel
+for batch_inputs, batch_outputs in dataloader:
+    batch_inputs, batch_outputs = batch_inputs.to("cuda"), batch_outputs.to("cuda")
+    start = time.time_ns()
+    optimizer.zero_grad()
+    inputs = batch_inputs.reshape(-1, num_inputs * num_inputs)
+    with torch.cuda.amp.autocast():
+        output = model(inputs) # 前向传播
+        loss = criterion(output, target=batch_outputs)
+        loss.backward() # 反向传播
+    optimizer.step()
+</code></pre>
+<h3 id="33-配置">3.3 配置</h3>
+<p>Offload 有如下配置，在使用时候可以注意。</p>
+<pre><code class="language-python">move_params_to_cpu (bool, Optional):
+    if ``True``, offload FP32 params to CPU. This is only relevant when
+    *``mixed_precision``* is ``True``.
+    
+cpu_offload (bool, Optional):
+    if ``True``, offload FP32 params to CPU. This is only relevant when
+    *``mixed_precision``* is ``True``. Note: This arg will be deprecated in favor of
+    *``move_params_to_cpu``* in an upcoming release.  
+    
+move_grads_to_cpu (bool, Optional):
+    move gradient shard to CPU after reduction. This is useful when
+    combined with CPU-based optimizers. It defaults to the value of
+    *``cpu_offload``*.    
+</code></pre>
+<h2 id="0x04-源码">0x04 源码</h2>
+<h3 id="41-构建">4.1 构建</h3>
+<p>我们接着看看如何构建一个 OffloadModel。</p>
+<h4 id="411-初始化">4.1.1 初始化</h4>
+<p>因为Python语言的特点，在初始化函数中可以看到 OffloadModel 的内部成员变量。传递的参数基本都直接配置到内部成员变量之中，除了model需要特殊处理。关于模型处理，回忆一下前面提到的：模型假定为nn.Sequential模型，并根据参数数量（几乎）平均分片到nn.Modules 列表之中。</p>
+<p>具体操作是：看看模型是否是list类型，如果是，说明已经分片好了，则直接把每一层用ModelShard封装到 model_slices，否则先调用_split 进行切片再封装到 model_slices。</p>
+<pre><code class="language-python">class OffloadModel(nn.Module):
+    def __init__(
+        self,
+        model: Any,
+        device: torch.device,
+        offload_device: torch.device = torch.device("cpu"),
+        num_slices: int = 3,
+        checkpoint_activation: bool = False,
+        num_microbatches: int = 1,
+    ):
+        super().__init__()
+
+        self.device = device # 计算设备
+        self.offload_device = offload_device # 设定卸载设备，一般来说就是cpu
+        # List of model shards that will be placed on/off the device.
+        self.model_slices: List[nn.Module] = [] # 存储原生模型的分片
+
+        if type(model) == list: # list代表已经分片好了
+            # This is already sharded using the auto shard functinality.
+            for i, m in enumerate(model):
+                self.model_slices.append( # 直接把每一层用ModelShard封装
+                    ModelShard(cpu_model_shard=m, device=device, offload_device=offload_device, index=i,)
+                )
+        else:
+            # Slice the model into roughly equivalent sequential shards.
+            splits = _split(model, num_slices) # 否则先split
+
+            for i, split in enumerate(splits): # 遍历split分区结果
+                # Add one model handling this slice
+                self.model_slices.append( # 然后把每一个分区用ModelShard封装
+                    ModelShard(
+                        cpu_model_shard=nn.Sequential(*split), device=device, offload_device=offload_device, index=i,
+                    )
+                )
+
+        # Expose a unified view of the slices
+        self._model = torch.nn.Sequential(*self.model_slices) # 最后生成一个nn.Sequential
+
+        # intermediate activations at the slice boundaries.
+        self._activations: List[Tuple] = []
+
+        # Currently we only support microbatches with activation checkpointing.
+        if not checkpoint_activation and num_microbatches &gt; 1:
+            raise RuntimeError("We currently only support microbatches with activation checkpointing.")
+
+        # Bool indicating if we want to checkpoint activation on the host.
+        self._checkpoint_activation = checkpoint_activation
+
+        # Number of microbatches to run per batch on the device
+        self._num_microbatches = num_microbatches
+</code></pre>
+<h4 id="412-切片">4.1.2 切片</h4>
+<p>初始化代码之中使用了_split 方法来切分，这就对应了前面思路之中提到的：<u>模型假定为nn.Sequential模型，并根据参数数量（几乎）平均分片到nn.Modules 列表之中。每个 nn.Module 现在包含整个模型的一部分，我们称之为模型分片（model shards）。</u></p>
+<p>我们具体看看代码，就能知道是如何大致进行均匀分区的。</p>
+<pre><code class="language-python">def _split(modules: nn.Sequential, number_splits: int) -&gt; List[List[nn.Module]]:
+    # 设定最小切分数目
+    number_splits = min(len(modules), number_splits) 
+    # 生成切分之后的容器
+    splits: List[List[nn.Module]] = [[] for _ in range(number_splits)]
+
+    # Count the number of parameters per exposed layer, use that as a proxy for memory footprint
+    # 计算modules的每层参数的元素数目之和
+    # p.numel()作用是获取tensor中一共包含多少个元素，比如 torch.randn(3,3) 是9个元素
+    total_number_params = sum([sum(p.numel() for p in m.parameters()) for m in modules])
+    # 每个分区应该得到的元素个数
+    number_parameters_per_shard = total_number_params // number_splits
+
+    current_shard = 0
+
+    for m in modules: # 遍历module的层
+        for p in m.parameters(): # 遍历每层的参数
+            p.data = p.data.pin_memory() # 把参数放到锁页内存，这样其转到GPU会更快。
+        # Number of parameters in the current shard
+        # 看看当前分区的元素数目
+        current_shard_params = sum(p.numel() for sm in splits[current_shard] for p in sm.parameters())
+
+        # This shard is big enough, point to the next one
+        # 如果当前分区够大了，就跳到下一个分区
+        if (
+            current_shard_params &gt; 0
+            and current_shard_params + sum(p.numel() for p in m.parameters()) &gt; number_parameters_per_shard
+            and current_shard &lt; number_splits - 1
+        ):
+            current_shard += 1
+
+        # 把m这层放到splits当前分区
+        splits[current_shard].append(m) 
+
+    # 打印出来每个分区大小    
+    for i, split in enumerate(splits):
+        current_shard_params = sum(p.numel() for sm in split for p in sm.parameters())
+        logging.info(f"Shard {i} holds {current_shard_params/1e6:.2f}M parameters")
+
+    return splits
+</code></pre>
+<h3 id="42-modelshard">4.2 ModelShard</h3>
+<p>Sequential模型的每个module被封装为ModelShard，所以我们继续看看ModelShard。</p>
+<h4 id="421-定义">4.2.1 定义</h4>
+<p>ModelShard的作用是封装模型的一个分片，这样可以在给定设备上的FW和BW过程之中动态加载所使用的参数。重要成员变量是：</p>
+<ul>
+<li>
+<p>model_shard ：Sequential模型的一个分片，每个分区包含一个或者多个层。</p>
+</li>
+<li>
+<p>device ：计算设备。</p>
+</li>
+<li>
+<p>offload_device ：卸载目标设备。</p>
+</li>
+<li>
+<p>cpu_to_gpu_stream ：从cpu到gpu的CUDA流。</p>
+</li>
+<li>
+<p>gpu_to_cpu_stream ：从gpu到cpu的CUDA流。</p>
+</li>
+</ul>
+<p>具体定义如下：</p>
+<pre><code class="language-python">class ModelShard(nn.Module):
+    """
+    Wrap one shard of the model, make it possible to load parameters on the
+    fly for the FW and BW pass on the given device.
+    """
+
+    def __init__(
+        self, cpu_model_shard: nn.Module, device: torch.device, offload_device: torch.device, index: int,
+    ):
+        super().__init__()
+        self.model_shard = cpu_model_shard # 模型分片
+        self.index = index
+
+        # Save all the parameter sizes to be able to restore them
+        self.device = device # 计算设备
+        torch.cuda.device(self.device)
+
+        self.offload_device = offload_device
+
+        self.model_shard.to(offload_device) # 先把模型放到CPU上
+        self._cpu_to_gpu_stream = torch.cuda.Stream(device=self.device) # 生成stream
+        self._gpu_to_cpu_stream = torch.cuda.Stream(device=self.device) # 生成stream
+</code></pre>
+<h4 id="422-功能函数">4.2.2 功能函数</h4>
+<p>其基础函数可以分类如下：</p>
+<ul>
+<li>转发函数，就是直接调用module对应的函数，比如forward，train。</li>
+<li>基础拷贝函数，就是把module拷贝到参数对应的设备之上，比如 to，to_device。</li>
+<li>功能函数，就是在特定的stream之上把module拷贝到特定的设备上，比如forward_load方法就是专门在_cpu_to_gpu_stream之上把模型拷贝到device之上，即在前向传播时候进行 CPU --&gt; GPU 的拷贝。</li>
+</ul>
+<pre><code class="language-python">def forward(self, *inputs):  # type: ignore
+    return self.model_shard(*inputs) if isinstance(inputs, tuple) else self.model_shard(inputs)
+
+def to(self, device: torch.device) -&gt; "ModelShard":  # type: ignore
+    # Make sure that the lookahead and lookback shards are not captured by this call
+    self.model_shard.to(device)
+    return self
+
+def train(self, mode: bool = True) -&gt; "ModelShard":
+    # Make sure that the lookahead and lookback shards are not captured by this call
+    self.model_shard.train(mode)
+    return self
+
+def to_device(self) -&gt; None:
+    self.model_shard.to(device=self.device, non_blocking=True)
+
+def forward_load(self, non_blocking: bool = True) -&gt; None:
+    with torch.cuda.stream(self._cpu_to_gpu_stream):
+        # Restore all the parameter buffers
+        self.model_shard.to(device=self.device, non_blocking=non_blocking)
+
+# Ignore the following function for code coverage since the backward pass
+# is triggered by C++ code and cannot be calculated when overriding
+# autograd.Function
+def backward_load(self, non_blocking: bool = True) -&gt; None:  # pragma: no cover
+    with torch.cuda.stream(self._cpu_to_gpu_stream):
+        self.model_shard.to(self.device, non_blocking=non_blocking)
+
+def forward_drop(self, non_blocking: bool = True) -&gt; None:
+    with torch.cuda.stream(self._gpu_to_cpu_stream):
+        self.model_shard.to(self.offload_device, non_blocking=non_blocking)
+
+# Ignore the following function for code coverage since the backward pass
+# is triggered by C++ code and cannot be calculated when overriding
+# autograd.Function
+def backward_drop(self, non_blocking: bool = True) -&gt; None:  # pragma: no cover
+    with torch.cuda.stream(self._gpu_to_cpu_stream):
+        self.model_shard.to(self.offload_device, non_blocking=non_blocking)
+</code></pre>
+<h3 id="43-前向传播">4.3 前向传播</h3>
+<p>有了上面的基础，我们来看看 OffloadModel 的 forward 方法。</p>
+<p>Offload 在每一步训练之中，会将一层（或一系列层）加载到GPU上，用于向前和向后传递，并根据需要将中间激活复制到GPU上。一旦给定分片的向前或向后传播完成，它将再次移回CPU。<u>所以我们看看在前向传播之中如何加载GPU，并且何时移回CPU</u>。</p>
+<h4 id="431-前向传播">4.3.1 前向传播</h4>
+<p>从设计思路可知，在每次迭代中，前向传播从CPU复制每个模型分片到GPU，然后使用小批量（minibatch）数据计算前向传播，并把模型分片从GPU复制回CPU。在后向传播过程中，重复相同的过程。</p>
+<p>前向传播的具体逻辑是：</p>
+<ul>
+<li>
+<p>如果设置了 _checkpoint_activation，则调用 OffloadFunction 把激活检查点卸载到CPU之上，直接返回（我们会在后续文章进行分析）。</p>
+</li>
+<li>
+<p>否则就执行 Offload，具体就是从前往后遍历模型，对于每一层，会做如下操作：</p>
+<ul>
+<li>前一层的激活放入计算设备上。</li>
+<li>拿到本层的输入，前一层的激活就是本层的输入。</li>
+<li>用前一层的激活进行前向传播计算。</li>
+<li>调用ShardSyncLayer 配置hook (discard/load slices FW and BW)。</li>
+<li>把本层计算结果插入到_activations，后续将成为下一层的输入。</li>
+<li>把本层计算结果拷贝到CPU。</li>
+</ul>
+</li>
+<li>
+<p>返回最后一个激活，就是整体计算结果，把结果放到GPU之上。</p>
+</li>
+</ul>
+<p>具体代码如下：</p>
+<pre><code class="language-python">def forward(self, *inputs: Any, **_: Any) -&gt; Any:
+    # `apply` calls the `forward` function of the `OffloadFunction` class
+    # and the `forward` function calls `inputs` on the first model shard.
+    # Please see https://pytorch.org/docs/stable/autograd.html#function for more details.
+
+    # We need the second param to be a dummy input to enable the
+    # backward pass to be triggered for integer inputs.
+    
+    # 注意，如果设置了_checkpoint_activation，就直接返回了。
+    if self._checkpoint_activation:
+        return OffloadFunction.apply(*inputs, torch.tensor([], requires_grad=True), self)
+
+    self._activations = []
+    for index in range(-1, len(self.model_slices)): # 从前往后遍历模型
+        if index &gt;= 0:
+            # 本层激活放入设备上
+            self._activations[index] = tuple([a.cuda() for a in list(self._activations[index])])
+            inputs = self._activations[index] # 前一层的激活就是本层的输入
+            inputs = self.model_slices[index](*inputs) # 用前一层的激活进行前向传播计算
+            
+        # Call the custom autograd hooks (discard/load slices FW and BW)
+        # 调用ShardSyncLayer hook
+        inputs = ShardSyncLayer.apply(inputs, index, self.model_slices, self)
+        self._activations.append(inputs) # 把本层计算结果插入到_activations，后续将成为下一层的输入
+        if index &gt;= 0:
+            # 把本层计算结果拷贝到CPU
+            self._activations[index] = tuple([a.cpu() for a in list(self._activations[index])])
+
+    result = self._activations[-1] # 返回最后一个激活，就是整体计算结果
+    result = tuple([r.cuda() for r in result]) # 结果放到GPU之上
+    return result[0] if len(result) == 1 else result
+</code></pre>
+<h4 id="432-hook">4.3.2 Hook</h4>
+<p>ShardSyncLayer 就是Hook，其是模型分片之间的同步点，这里就是做加载/移除等工作，不涉及具体前向后向计算工作。</p>
+<ul>
+<li>
+<p>在向前传播中，它会移除前一个分片中的参数，并加载下一个分片的参数。</p>
+</li>
+<li>
+<p>在后向传播时，它会做相反的动作。从设计思路可知，在后向传播过程中，重复与前向传播相同的过程。</p>
+</li>
+</ul>
+<p>ShardSyncLayer 不会更改或创建任何输出，而是将输入转发到输出。在代码中几个TODO注释比较有意思，可能是开发者之间没有做好工作交接，所以有疑惑 <sup>_</sup>。</p>
+<pre><code class="language-python"># TODO(anj-s): Are these redundant in the backward pass?
+# TODO(anj-s): Why do we need to do this?
+</code></pre>
+<p>具体如下：</p>
+<pre><code class="language-python">class ShardSyncLayer(torch.autograd.Function):
+    """
+     The shard sync layer is a synchronization point between model shards.
+     - In the forward pass, it drops parameters in the previous shard and
+     loads parameters for the next shard.
+     - In the backward pass, it does the reverse.
+     It does not change or create any outputs at all, instead it just
+     forwards the input as the output.
+     NOTE: see https://pytorch.org/docs/stable/autograd.html#torch.autograd.Function
+     """
+
+    @staticmethod
+    @_conditional_amp_fwd_decorator  # type: ignore
+    def forward(ctx: Any, inputs: Any, index: int, model_slices: Any, model_instance: Any) -&gt; Any:
+        drop_index = index # 本层
+        load_index = index + 1 # 下一层
+        max_slices = len(model_slices)
+
+        if drop_index &gt;= 0:
+            # Move shard from device to offload device.
+            model_slices[drop_index].forward_drop() # 卸载本层
+
+        if load_index &lt; max_slices:
+            # Load shard from offload device to device.
+            model_slices[load_index].forward_load() # 需要把下一层加载到GPU
+
+        ctx.index = index
+        ctx.model_slices = model_slices
+        ctx.model_instance = model_instance
+
+        return inputs if isinstance(inputs, tuple) else (inputs,)
+
+    # Ignore the following function for code coverage since the backward pass
+    # is triggered by C++ code and cannot be calculated when overriding
+    # autograd.Function
+    @staticmethod
+    @_conditional_amp_bwd_decorator
+    def backward(ctx, *grad_outputs):  # type: ignore # pragma: no cover
+
+        # 从前向计算图角度看，反向传播需要把前向计算的下一层释放，本层加载
+        load_index = ctx.index # 本层
+        drop_index = load_index + 1 # 下一层 
+        model_slices = ctx.model_slices
+        model_instance = ctx.model_instance
+
+        # TODO(anj-s): Are these redundant in the backward pass?
+        if drop_index == len(model_slices): # 如果是分区的最后一层
+            # Drop the last activation since it is still on the CPU
+            # after the loss.backward() call.
+            # 把激活放回到GPU，但是这一步骤好像重复了，在fw之中已经做了，这也是代码维护者的疑问
+            model_instance._activations[-1] = tuple([a.cuda() for a in list(model_instance._activations[-1])])
+
+        if drop_index &lt; len(model_slices):
+            # Move shard from device to offload device.
+            model_slices[drop_index].backward_drop() # 把分片从计算设备移动到offload设备
+            model_instance._activations[drop_index] = tuple(
+                [a.cpu() for a in list(model_instance._activations[drop_index])]
+            )
+
+        if load_index &gt;= 0:
+            # Load shard from offload device to device.
+            model_slices[load_index].backward_load() # 把分片从offload 设备加载到计算设备
+            model_instance._activations[load_index] = tuple( # 激活加载到计算设备
+                [a.cuda() for a in list(model_instance._activations[load_index])]
+            )
+
+        # The returned variables need to mirror the forward inputs
+        # TODO(anj-s): Why do we need to do this?
+        if isinstance(grad_outputs, tuple):
+            return grad_outputs[0], None, None, None
+
+        return grad_outputs, None, None, None
+</code></pre>
+<p>我们总结一下逻辑图，假设有两个 ModelShard，每个 ModelShard 包括两个层（下面的前/后指的是从前向传播角度看的层之间关系）。</p>
+<ul>
+<li>前向传播时候，ShardSyncLayer 会把计算图之中<u>前一个</u>ModelShard参数移动到CPU，加载<u>后一个</u>ModelShard参数到GPU。</li>
+<li>后向传播时候，ShardSyncLayer 会把计算图之中<u>后一个</u>ModelShard参数移动到CPU，加载<u>前一个</u>ModelShard参数到GPU。</li>
+<li>前向后向传播之中，ShardSyncLayer 的动作其实相同，但是逻辑相反。</li>
+</ul>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220121143415115-757405510.jpg" alt="" loading="lazy"></p>
+<p>至此，Offload 分析完毕，下一篇介绍混合精度相关，敬请期待。</p>
+<h2 id="0xff">0xFF</h2>
+<p><a href="https://arxiv.org/pdf/2101.06840.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2101.06840.pdf</a></p>
+<p><a href="https://www.deepspeed.ai/tutorials/zero-offload/" target="_blank" rel="noopener nofollow">https://www.deepspeed.ai/tutorials/zero-offload/</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/deepspeed-extreme-scale-model-training-for-everyone/" target="_blank" rel="noopener nofollow">DeepSpeed: Extreme-scale model training for everyone</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/zero-infinity-and-deepspeed-unlocking-unprecedented-model-scale-for-deep-learning-training/" target="_blank" rel="noopener nofollow">https://www.microsoft.com/en-us/research/blog/zero-infinity-and-deepspeed-unlocking-unprecedented-model-scale-for-deep-learning-training/</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/zero-2-deepspeed-shattering-barriers-of-deep-learning-speed-scale/" target="_blank" rel="noopener nofollow">https://www.microsoft.com/en-us/research/blog/zero-2-deepspeed-shattering-barriers-of-deep-learning-speed-scale/</a></p>
+<p><a href="https://www.marktechpost.com/2021/02/01/microsoft-and-the-university-of-california-merced-introduces-zero-offload-a-novel-heterogeneous-deeplearning-training-technology-to-train-multi-billion-parameter-models-on-a-single-gpu/" target="_blank" rel="noopener nofollow">https://www.marktechpost.com/2021/02/01/microsoft-and-the-university-of-california-merced-introduces-zero-offload-a-novel-heterogeneous-deeplearning-training-technology-to-train-multi-billion-parameter-models-on-a-single-gpu/</a></p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1127.2130854576158" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-04-08 11:47">2022-01-21 14:35</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">3698</span>)&nbsp;
+评论(<span id="post_comment_count">6</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15824699);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15824699', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15824699.html', title: '[源码分析] Facebook如何训练超大模型 --- (3)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15824699, cb_entryCreatedDate = '2022-01-21 14:35', cb_postType = 1, cb_postTitle = '[源码分析] Facebook如何训练超大模型 --- (3)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.trae.com.cn/?utm_source=advertising&amp;utm_medium=cnblogs_ug_cpa&amp;utm_term=hw_trae_cnblogs" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-trae')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202504/35695-20250422130943631-261509646.jpg" onload="countCreativeImpressions('C1-字节-trae')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDpmGnmfDb7QZ4g607J8g3oETphMex7iHheERIamGMOoa3DBK9QMBlcZRvYyyNJlPYlefWsgt6TxpAPMOPgZqcyeUgPAFuT_fAArY3UXN2xYrb9gWmdtmNYzw-TIzSqGYeQ" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

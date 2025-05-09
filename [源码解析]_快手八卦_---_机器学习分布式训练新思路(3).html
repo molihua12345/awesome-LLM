@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。" />
+    <meta property="og:description" content="“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15764264.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15764264.html",
+      "headline": "[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3)",
+      "description": "[源码解析] 快手八卦 机器学习分布式训练新思路(3) 0x00 摘要 “Bagua“ 是快手和苏黎世理工（ETH Z\u0026#252;rich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。其特点是： 并行性能显著提高； 对网络环境更",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-06T20:13:00.0000000&#x2B;08:00",
+      "dateModified": "2022-01-06T20:13:00.0000000&#x2B;08:00",
+      "wordCount": "58454",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15764264;
+            window.currentPostDateAdded = '2022-01-06 20:13';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15764264.html" title="发布于 2022-01-06 20:13">
+    <span role="heading" aria-level="2">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        “Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码解析-快手八卦-----机器学习分布式训练新思路3">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码解析-快手八卦-----机器学习分布式训练新思路3" rel="noopener nofollow">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x02-去中心化" rel="noopener nofollow">0x02 去中心化</a><ul><li><a href="#21-示例用法" rel="noopener nofollow">2.1 示例用法</a></li><li><a href="#22-去中心化培训概述" rel="noopener nofollow">2.2 去中心化培训概述</a></li><li><a href="#23-去中心化训练算法" rel="noopener nofollow">2.3 去中心化训练算法</a></li><li><a href="#24-decentralized-sgd" rel="noopener nofollow">2.4 Decentralized SGD</a></li><li><a href="#25-通信开销" rel="noopener nofollow">2.5 通信开销</a></li><li><a href="#26-分析" rel="noopener nofollow">2.6 分析</a><ul><li><a href="#261-decentralizedalgorithmimpl" rel="noopener nofollow">2.6.1 DecentralizedAlgorithmImpl</a><ul><li><a href="#2611-定义" rel="noopener nofollow">2.6.1.1 定义</a></li><li><a href="#2612-初始化状态" rel="noopener nofollow">2.6.1.2 初始化状态</a></li><li><a href="#2613-初始化操作" rel="noopener nofollow">2.6.1.3 初始化操作</a></li><li><a href="#2614-post操作" rel="noopener nofollow">2.6.1.4 Post操作</a></li></ul></li><li><a href="#262-baguabucket" rel="noopener nofollow">2.6.2 BaguaBucket</a><ul><li><a href="#2621-append_decentralized_synchronous_op" rel="noopener nofollow">2.6.2.1 append_decentralized_synchronous_op</a></li><li><a href="#2622-baguabucket" rel="noopener nofollow">2.6.2.2 BaguaBucket</a></li><li><a href="#2623-decentralizedfullprecisionsynchronous" rel="noopener nofollow">2.6.2.3 DecentralizedFullPrecisionSynchronous</a><ul><li><a href="#26231-发送" rel="noopener nofollow">2.6.2.3.1 发送</a></li><li><a href="#26232-拷贝回来" rel="noopener nofollow">2.6.2.3.2 拷贝回来</a></li></ul></li></ul></li></ul></li></ul></li><li><a href="#0x03-异步" rel="noopener nofollow">0x03 异步</a><ul><li><a href="#31-示例用法" rel="noopener nofollow">3.1 示例用法</a></li><li><a href="#32-异步模型平均" rel="noopener nofollow">3.2 异步模型平均</a></li><li><a href="#33-算法" rel="noopener nofollow">3.3 算法</a></li><li><a href="#34-分析" rel="noopener nofollow">3.4 分析</a><ul><li><a href="#341-异步通信实现" rel="noopener nofollow">3.4.1 异步通信实现</a></li><li><a href="#342-初始化操作" rel="noopener nofollow">3.4.2 初始化操作</a></li><li><a href="#343-加锁解锁" rel="noopener nofollow">3.4.3 加锁解锁</a></li><li><a href="#344-计算线程" rel="noopener nofollow">3.4.4 计算线程</a><ul><li><a href="#3441-前向传播" rel="noopener nofollow">3.4.4.1 前向传播</a></li><li><a href="#3442-后向传播" rel="noopener nofollow">3.4.4.2 后向传播</a></li></ul></li><li><a href="#345-通信线程" rel="noopener nofollow">3.4.5 通信线程</a><ul><li><a href="#3451通知后端" rel="noopener nofollow">3.4.5.1通知后端</a><ul><li><a href="#python" rel="noopener nofollow">Python</a></li><li><a href="#rust" rel="noopener nofollow">Rust</a></li></ul></li><li><a href="#3452-归并" rel="noopener nofollow">3.4.5.2 归并</a><ul><li><a href="#python-1" rel="noopener nofollow">Python</a></li><li><a href="#rust-1" rel="noopener nofollow">Rust</a></li></ul></li></ul></li></ul></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。其特点是：</p>
+<ul>
+<li>
+<p>并行性能显著提高；</p>
+</li>
+<li>
+<p>对网络环境更鲁棒；</p>
+</li>
+<li>
+<p>“一键式”使用；</p>
+</li>
+<li>
+<p>分布式通讯算法易拓展性；</p>
+</li>
+<li>
+<p>可用于工业级场景大规模使用；</p>
+</li>
+<li>
+<p>安全、故障易排查；</p>
+</li>
+</ul>
+<p>本文以：</p>
+<ul>
+<li>快手官方公共号文章 <a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a></li>
+<li>“bagua"论文 <a href="https://arxiv.org/pdf/2107.01499.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2107.01499.pdf</a></li>
+<li>“bagua"官方网站 <a href="https://tutorials.baguasys.com/" target="_blank" rel="noopener nofollow">https://tutorials.baguasys.com/</a></li>
+<li>“bagua" 演示文档</li>
+<li><strong>项目 GitHub 地址：</strong><a href="https://github.com/BaguaSys/bagua" target="_blank" rel="noopener nofollow"><strong>https://github.com/BaguaSys/bagua</strong></a></li>
+</ul>
+<p>为基础来分析学习。本文介绍去中心化和异步通信。</p>
+<p>本系列前两篇链接为：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15763694.html" target="_blank">源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15764138.html" target="_blank">源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)</a></p>
+<h2 id="0x02-去中心化">0x02 去中心化</h2>
+<p>官方文章中是这样介绍其设计思路的：</p>
+<ul>
+<li>中心化或是去中心化（Centralized or Decentralized）：在中心化的通讯模式中，梯度或模型的同步过程需要所有的工作节点进行参与，因此，较高的网络延时往往会导致训练效率的降低。去中心化的通信模式 往往可以有效的解决这一问题：在该模式下，工作节点可以被连接成特定的拓扑结构（例如环），在通信过程中，每一个工作节点只与和它相邻的节点进行通信。</li>
+</ul>
+<p>以下结合 <a href="https://tutorials.baguasys.com/algorithms/decentralized" target="_blank" rel="noopener nofollow">https://tutorials.baguasys.com/algorithms/decentralized</a> 来学习。</p>
+<h3 id="21-示例用法">2.1 示例用法</h3>
+<p>用户可以在源码之中找到运行去中心化 SGD 的完整示例，这里只是简单介绍。</p>
+<p>您需要初始化八卦算法：</p>
+<pre><code class="language-python">from bagua.torch_api.algorithms import decentralized
+algorithm = decentralized.DecentralizedAlgorithm()
+</code></pre>
+<p>然后用以下方法装饰您的模型：</p>
+<pre><code class="language-python">model = model.with_bagua([optimizer], algorithm)
+</code></pre>
+<h3 id="22-去中心化培训概述">2.2 去中心化培训概述</h3>
+<p>Decentralized SGD 是一种数据并行的分布式学习算法，它消除了所有 worker 之间必有存在一个集中式全局模型的需求，这使得它在通信模式上与基于 Allreduce 或基于参数服务器的算法有很大不同。使用去中心化 SGD，每个 worker 只需要与一个或几个特定的 worker 交换数据，而不是全局聚合数据。因此，去中心化通信的通信连接数比 Allreduce 少得多，通信开销比 Parameter Server 更均衡。尽管去中心化 SGD 可能会导致每个 worker 的模型不同，但理论上已经证明，去中心化 SGD 算法的收敛速度与其对应中心化版本相同。</p>
+<h3 id="23-去中心化训练算法">2.3 去中心化训练算法</h3>
+<p>目前，不时有许多去中心化训练算法被提出。这些令人惊叹的工作集中在去中心化训练的不同方面，如对等选择（peer selection）、数据压缩、异步等，并提供了许多远见。到目前为止，八卦已经结合了两种基本的去中心化算法，即去中心化 SGD和 低精度去中心化 SGD。凭借八卦对去中心化的自动系统支持，我们预计在不久的将来会实现越来越多的去中心化算法。</p>
+<h3 id="24-decentralized-sgd">2.4 Decentralized SGD</h3>
+<p>现在我们将描述在八卦中实现的 Decentralized SGD 算法。让我们假设worker 的数量是 <em>n</em>，worker上的模型参数 是：</p>
+<p></p><div class="math display">\[x^{(i)}
+ ,i∈ \{0,...,n−1\}
+\]</div><p></p><p>每个工作人员都能够直接从任何其他工作人员发送或接收数据。在每次迭代 t 中，算法重复以下步骤：</p>
+<ol>
+<li>
+<p>迭代t 之中，每个worker 计算本地梯度 <span class="math inline">\(g^{(t)}_t\)</span></p>
+</li>
+<li>
+<p>将本地模型与其选定的对等模型做平均：</p>
+<p></p><div class="math display">\[x_{t+\frac{1}{2}}^{(i)} = \frac{x^{(i)}_{t} + x_t^{(j)}}{2}
+\]</div><p></p></li>
+<li>
+<p>用局部梯度更新平均模型</p>
+<p></p><div class="math display">\[X^{(i)}_{t+1} = X^{(i)}_{t+\frac{1}{2}} - γg_t^{(i)}
+\]</div><p></p></li>
+</ol>
+<p>在第 2 步中，我们采用一种策略为每次迭代中的每个 worker 选择一个 peer，这样所有 worker 都正确配对并且数据交换是有效的，因为每个 worker 可以在迭代之间与不同的 peer 交换数据。简而言之，我们的策略将工作人员平均分成两组，并在两组之间动态配对 worker，每次迭代都不同。</p>
+<h3 id="25-通信开销">2.5 通信开销</h3>
+<p>去中心化 SGD 的通信开销与网络程度（degree of network）高度相关，即一个 worker 与其他 worker 的连接数。不同的拓扑或策略会导致不同程度的网络。很明显，我们之前描述的Decentralized SGD算法的网络度为1。因此，在每次迭代中，一个worker只需要与一个worker建立一个连接来交换模型大小1倍的数据。我们比较了不同通信模式在最繁忙节点延迟和带宽方面的通信复杂性。</p>
+<table>
+<thead>
+<tr>
+<th>算法</th>
+<th>延迟复杂度</th>
+<th>带宽复杂度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Allreduce（环）</td>
+<td>O(<em>n</em>)</td>
+<td>O(1)</td>
+</tr>
+<tr>
+<td>参数服务器</td>
+<td>O(1)</td>
+<td>O(<em>n</em>)</td>
+</tr>
+<tr>
+<td>八卦的Decentralized SGD</td>
+<td>O(1)</td>
+<td>O(1)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="26-分析">2.6 分析</h3>
+<p>前面官方教程之中，这部分是关键：</p>
+<blockquote>
+<p>在第 2 步中，我们采用一种策略为每次迭代中的每个 worker 选择一个 peer，这样所有 worker 都正确配对并且数据交换是有效的，因为每个 worker 可以在迭代之间与不同的 peer 交换数据。简而言之，我们的策略将工作人员平均分成两组，并在两组之间动态配对 worker，每次迭代都不同。</p>
+</blockquote>
+<p>我们就以此出发来进行分析学习。</p>
+<h4 id="261-decentralizedalgorithmimpl">2.6.1 DecentralizedAlgorithmImpl</h4>
+<h5 id="2611-定义">2.6.1.1 定义</h5>
+<p>参数 peer_selection_mode 可以有两种选择：</p>
+<ul>
+<li><code>all</code>表示在每个通信步骤中平均所有worker的权重。</li>
+<li><code>shift_one</code> 是指每个 worker 在每个通信步骤中选择一个不同的对等点进行权重平均。</li>
+</ul>
+<pre><code class="language-python">class DecentralizedAlgorithmImpl(AlgorithmImpl):
+    def __init__(
+        self,
+        process_group: BaguaProcessGroup,
+        hierarchical: bool = True,
+        peer_selection_mode: str = "all",
+        communication_interval: int = 1,
+    ):
+        """
+        Implementation of the
+        `Decentralized SGD &lt;https://tutorials.baguasys.com/algorithms/decentralized&gt;`_
+        algorithm.
+
+        Args:
+            process_group (BaguaProcessGroup): The process group to work on.
+            hierarchical (bool): Enable hierarchical communication.
+            peer_selection_mode (str): Can be ``"all"`` or ``"shift_one"``. ``"all"`` means all workers'
+                weights are averaged in each communication step. ``"shift_one"`` means each worker
+                selects a different peer to do weights average in each communication step.
+            communication_interval (int): Number of iterations between two communication steps.
+
+        """
+        super(DecentralizedAlgorithmImpl, self).__init__(process_group)
+        self.hierarchical = hierarchical
+        self.peer_selection_mode = peer_selection_mode
+        self.communication_interval = communication_interval
+        self.cuda_event = torch.cuda.Event()
+</code></pre>
+<h5 id="2612-初始化状态">2.6.1.2 初始化状态</h5>
+<p><code>_init_states</code> 方法把权重张量初始化到 bucket._peer_weight。</p>
+<p>提一下，LowPrecisionDecentralizedAlgorithmImpl 是初始化了左右两个 peer_weight，因为精力所限，本文不对其进行分析，有兴趣的读者可以自行深入。</p>
+<pre><code class="language-python">def _init_states(self, bucket: BaguaBucket):
+    weight_tensor = bucket.flattened_tensor()
+    bucket._peer_weight = weight_tensor.to_bagua_tensor("peer_weight")
+</code></pre>
+<h5 id="2613-初始化操作">2.6.1.3 初始化操作</h5>
+<p>init_operations 使用 append_decentralized_synchronous_op 配置了 bucket 的 _decentralized_op 成员变量。</p>
+<pre><code class="language-python">def init_operations(
+    self,
+    bagua_module: BaguaModule,
+    bucket: BaguaBucket,
+):
+    self._init_states(bucket)
+    torch.cuda.synchronize()
+    bucket.clear_ops()
+    decentralized_op = bucket.append_decentralized_synchronous_op( # 配置成员变量
+        peer_weight=bucket._peer_weight,
+        hierarchical=self.hierarchical,
+        peer_selection_mode=self.peer_selection_mode,
+        group=self.process_group,
+    )
+    bucket._decentralized_op = decentralized_op
+</code></pre>
+<h5 id="2614-post操作">2.6.1.4 Post操作</h5>
+<p>init_post_backward_hook 注册了 post hook 操作，会把去中心化平均的结果拷贝回来，后面会在进行细化分析。</p>
+<pre><code class="language-python">def init_post_backward_hook(self, bagua_module: BaguaModule):
+    def hook():
+        if self._should_communicate(bagua_module):
+            bagua_module._bagua_backend.wait_pending_comm_ops()
+
+            torch.cuda.current_stream().record_event(self.cuda_event)
+            self.cuda_event.synchronize()
+            for bucket in bagua_module.bagua_buckets:
+                bucket._decentralized_op.copy_back_peer_weight( # 拷贝回来
+                    bucket.backend_bucket
+                )
+
+    return hook
+</code></pre>
+<p>算法如下，append_decentralized_synchronous_op 用来通信，init_post_backward_hook 把去中心化平均的结果拷贝回来。</p>
+<pre><code class="language-python">+--------------------------------------------------------------------+
+|DecentralizedAlgorithmImpl                                          |
+|                                                                    |
+|     process_group                                                  |
+|                                                                    |
+|     decentralized_op = bucket.append_decentralized_synchronous_op  |
+|                                                                    |
+|     peer_selection_mode                                            |
+|                                                                    |
+|     init_post_backward_hook                                        |
+|                                                                    |
++--------------------------------------------------------------------+
+</code></pre>
+<h4 id="262-baguabucket">2.6.2 BaguaBucket</h4>
+<p>我们接下来进入 BaguaBucket，其是聚集了一系列 Bagua 张量，其最终调用 backend_bucket 进行处理，就是 rust 的 BaguaBucketPy。</p>
+<pre><code class="language-python">class BaguaBucket:
+    def __init__(
+        self, tensors: List[BaguaTensor], name: str, flatten: bool, alignment: int = 1
+    ) -&gt; None:
+        """
+        Create a Bagua bucket with a list of Bagua tensors.
+        """
+        self.tensors = tensors
+        """
+        The tensors contained within the bucket.
+        """
+        self.bagua_module_name = tensors[0].bagua_module_name
+        self._bagua_backend = get_backend(self.bagua_module_name)
+        self.name = name
+        """
+        The bucket's name.
+        """
+        self.padding_tensor = None
+
+        if alignment &gt; 1:
+            padding = sum(tensor.numel() for tensor in self.tensors) % alignment
+            if padding &gt; 0:
+                padding = alignment - padding
+                self.padding_tensor = torch.zeros(
+                    padding, dtype=self.tensors[0].dtype, device=self.tensors[0].device
+                ).to_bagua_tensor("bagua_padding_tensor_bucket_" + name)
+
+        self._all_tensors = (
+            self.tensors + [self.padding_tensor]
+            if self.padding_tensor is not None
+            else self.tensors
+        )
+
+        self.backend_tensor = None
+        self.flatten = flatten
+        if self.flatten:
+            self._flatten_()
+            torch.cuda.empty_cache()
+
+        self.backend_bucket = B.BaguaBucketPy( # 底层实现
+            name, [tensor._bagua_backend_tensor for tensor in self._all_tensors]
+        )
+
+        for tensor in self._all_tensors:
+            tensor._bagua_bucket = self
+</code></pre>
+<h5 id="2621-append_decentralized_synchronous_op">2.6.2.1 append_decentralized_synchronous_op</h5>
+<p>append_decentralized_synchronous_op 是往桶添加了操作，当bucket中的所有张量都标记为ready时，该操作将由Bagua后端按照附加顺序执行。参数 peer_weight 的意义是用于与对等模型求平均值的张量，应与桶张量的总大小相同。</p>
+<p>append_decentralized_synchronous_op 不是 inplace 操作，这意味着桶权重首先复制到<code>peer_weight</code>，去中心化平均的结果放置在 <code>peer_weight</code>，然后使用<code>op.copy_back_peer_weight(self)</code>  将结果再拷贝回来。具体在前面 init_post_backward_hook 之中有拷贝回来的操作。</p>
+<p>我们还可以注意到，如果采取了 hierarchical 模式，则传入了 inter, intra 两种communicator。</p>
+<pre><code class="language-python">def append_decentralized_synchronous_op(
+    self,
+    peer_weight: BaguaTensor,
+    hierarchical: bool = True,
+    peer_selection_mode: str = "all",
+    group: Optional[BaguaProcessGroup] = None,
+):
+    """
+    Append a decentralized synchronous operation to a bucket. It will do gossipy style model averaging among workers.
+    """
+    if group is None:
+        group = _get_default_group()
+
+    if hierarchical:
+        return self.backend_bucket.append_decentralized_synchronous_op(
+            _bagua_backend_comm(group.get_inter_node_communicator()),
+            _bagua_backend_comm(group.get_intra_node_communicator()),
+            hierarchical=hierarchical,
+            peer_selection_mode=peer_selection_mode,
+            peer_weight=peer_weight._bagua_backend_tensor,
+        )
+    else:
+        return self.backend_bucket.append_decentralized_synchronous_op(
+            _bagua_backend_comm(group.get_global_communicator()),
+            None,
+            hierarchical=hierarchical,
+            peer_selection_mode=peer_selection_mode,
+            peer_weight=peer_weight._bagua_backend_tensor,
+        )
+</code></pre>
+<h5 id="2622-baguabucket">2.6.2.2 BaguaBucket</h5>
+<p>我们来到了 Rust 世界，BaguaBucket 的 append_decentralized_synchronous_op 操作之中，如果是 "all" 或者 "shift_one"，则会调用 DecentralizedFullPrecisionSynchronous。</p>
+<pre><code class="language-rust">pub fn append_decentralized_synchronous_op(
+    &amp;mut self,
+    communicator_internode: Option&lt;&amp;BaguaSingleCommunicator&gt;,
+    communicator_intranode: Option&lt;&amp;BaguaSingleCommunicator&gt;,
+    hierarchical: bool,
+    peer_selection_mode: String,
+    peer_weight: BaguaTensor,
+) -&gt; Arc&lt;DecentralizedFullPrecisionSynchronous&gt; {
+    let communicator =
+        BaguaCommunicator::new(communicator_internode, communicator_intranode, hierarchical)
+            .expect("cannot create communicator");
+    let comm_op = Arc::new(DecentralizedFullPrecisionSynchronous {
+        communicator,
+        peer_selection_mode: match peer_selection_mode.as_str() {
+            "all" =&gt; PeerSelectionMode::All,
+            "shift_one" =&gt; PeerSelectionMode::ShiftOne,
+            &amp;_ =&gt; {
+                unimplemented!("unsupported peer_selection_mode for decentralized algorithm (should be `all` or `shift_one`)")
+            }
+        },
+        step: Default::default(),
+        peer_weight,
+    });
+
+    self.inner
+        .lock()
+        .comm_ops
+        .push(comm_op.clone() as Arc&lt;dyn CommOpTrait + Send + Sync&gt;);
+    comm_op
+}
+</code></pre>
+<h5 id="2623-decentralizedfullprecisionsynchronous">2.6.2.3 DecentralizedFullPrecisionSynchronous</h5>
+<p>DecentralizedFullPrecisionSynchronous 位于 rust/bagua-core/bagua-core-internal/src/comm_ops/decentralized_full_precision_synchronous.rs 之中。</p>
+<p>其定义如下：</p>
+<pre><code class="language-rust">pub struct DecentralizedFullPrecisionSynchronous {
+    pub communicator: BaguaCommunicator,
+    pub peer_selection_mode: PeerSelectionMode,
+    pub step: Mutex&lt;usize&gt;,
+    pub peer_weight: BaguaTensor,
+}
+</code></pre>
+<h6 id="26231-发送">2.6.2.3.1 发送</h6>
+<p>再回忆一下官方思路。</p>
+<blockquote>
+<p>在第 2 步中，我们采用一种策略为每次迭代中的每个 worker 选择一个 peer，这样所有 worker 都正确配对并且数据交换是有效的，因为每个 worker 可以在迭代之间与不同的 peer 交换数据。简而言之，我们的策略将工作人员平均分成两组，并在两组之间动态配对 worker，每次迭代都不同。</p>
+</blockquote>
+<p>具体就是通过下面代码实现的。<u>关键点在函数的最后一句，通过调整step， 计算出下一个peer，这样每次peer都不同</u>。</p>
+<pre><code class="language-rust">                    // 计算出下一个peer，关键点在函数的最后一句，通过调整step，每次peer都不同
+                    let peer_rank = if c.rank &lt; c.nranks / 2 {
+                        ((step + rank) % ((nranks + 1) / 2)) + (nranks / 2)
+                    } else {
+                        (rank - (nranks / 2) - step).rem_euclid(nranks / 2)
+                    } 
+                    
+										......
+                            c.send(&amp;t.raw, peer_rank); // 发送
+                            c.recv(peer_tensor, peer_rank); // 接受
+                    ......
+                    
+                    *self.step.lock() += 1; // 这里是关键点！递增到下一个peer
+</code></pre>
+<p>全部代码如下：</p>
+<pre><code class="language-rust">impl CommOpTrait for DecentralizedFullPrecisionSynchronous {
+    fn execute_background_communication(
+        &amp;self,
+        bucket: Arc&lt;BaguaBucket&gt;,
+        comm_op_channels: &amp;BaguaCommOpChannels,
+    ) {
+        let bucket_guard = bucket.inner.lock();
+        let stream_ptr = self.communicator.stream_ptr();
+
+        // 获取不同的communicator
+        let mut communication_tensor = match &amp;self.communicator {
+            BaguaCommunicator::SingleCommunicator(_) =&gt; {
+                bucket_guard.get_communication_tensor(stream_ptr, false, false)
+            }
+            BaguaCommunicator::HierarchicalCommunicator(x) =&gt; match x {
+                BaguaHierarchicalCommunicator::Leader(_) =&gt; {
+                    bucket_guard.get_communication_tensor(stream_ptr, true, true)
+                }
+                BaguaHierarchicalCommunicator::Worker(_) =&gt; {
+                    bucket_guard.get_communication_tensor(stream_ptr, false, false)
+                }
+            },
+        };
+
+        let peer_mode = &amp;self.peer_selection_mode;
+        let mut peer_guard = self.peer_weight.inner.write();
+        let mut peer_tensor = peer_guard.raw.as_mut();
+        let step = { *self.step.lock() } as i64;
+
+        self.communicator.execute_communication( // 执行通信
+            &amp;mut communication_tensor,
+            true,
+            true,
+            false,
+            &amp;mut |c, t| {
+                match peer_mode {
+                    PeerSelectionMode::All =&gt; {
+                        // 做普通 allreduce
+                        {
+                            peer_tensor.clone_from(&amp;t.raw, c.stream_ptr);
+                            let _guard = NCCLGroupGuard::new();
+                            c.allreduce_inplace(peer_tensor, BaguaReductionOp::AVG);
+                        }
+                    }
+                    PeerSelectionMode::ShiftOne =&gt; { // shift_one 
+                        let rank = c.rank as i64;
+                        let nranks = c.nranks as i64;
+                        // 计算出下一个peer，关键点在函数的最后一句，通过调整step，每次peer都不同
+                        let peer_rank = if c.rank &lt; c.nranks / 2 {
+                            ((step + rank) % ((nranks + 1) / 2)) + (nranks / 2)
+                        } else {
+                            (rank - (nranks / 2) - step).rem_euclid(nranks / 2)
+                        } as i32;
+                        {
+                            let _guard = NCCLGroupGuard::new();
+                            c.send(&amp;t.raw, peer_rank); // 发送
+                            c.recv(peer_tensor, peer_rank); // 接受
+                        }
+                        peer_tensor.average_inplace(&amp;t.raw, c.stream_ptr);
+                    },
+                    PeerSelectionMode::Ring =&gt; {
+                        unimplemented!() // 没有实现
+                    },
+                }
+            },
+        );
+
+        *self.step.lock() += 1; // 这里是关键点！递增到下一个pee
+    }
+}
+</code></pre>
+<p>没有精力去研究rust，所以使用源码中的测试代码 tests/torch_api/test_decentralized.py 来看看，八卦在这方面真心做的不错。</p>
+<pre><code class="language-python">def get_peer_rank(peer_selection_mode, rank, nranks, step, communication_interval):
+    comm_step = step // communication_interval
+    if peer_selection_mode == "shift_one":
+        if rank &lt; nranks // 2:
+            return ((comm_step + rank) % ((nranks + 1) // 2)) + (nranks // 2)
+        else:
+            return (rank - (nranks // 2) - comm_step) % (nranks // 2)
+    else:
+        ValueError("Unsupported `peer_selection_mode`")
+
+step = 1
+for i in range(6):
+    print("iteration : ", i)
+    print("peer is : ", get_peer_rank("shift_one", 1, 5, step, 1))
+    step += 1
+    
+"""
+iteration :  0
+peer is :  4
+iteration :  1
+peer is :  2
+iteration :  2
+peer is :  3
+iteration :  3
+peer is :  4
+iteration :  4
+peer is :  2
+iteration :  5
+peer is :  3
+"""
+</code></pre>
+<p>整理出图如下，worker 1 每次分别和 worker 4， worker 2，worker 3 进行交换。</p>
+<pre><code class="language-python">                              +--------------+
+                              |              |
+                              |   Worker 0   |
+                              |              |
+                              |              |
+                              +--------------+
+
+                              +--------------+
+                              |              |
+                   +-------&gt;  |   Worker 2   |
++--------------+   | peer 2   |              |
+|              |   |          |              |
+|   Worker 1   |   |          +--------------+
+|              +---+
+|              |   |          +--------------+
++--------------+   |          |              |
+                   |          |   Worker 3   |
+                   +-------&gt;  |              |
+                   | peer 3   |              |
+                   |          +--------------+
+                   |
+                   |          +--------------+
+                   |          |              |
+                   +--------&gt; |   Worker 4   |
+                     peer 1   |              |
+                              |              |
+                              +--------------+
+</code></pre>
+<h6 id="26232-拷贝回来">2.6.2.3.2 拷贝回来</h6>
+<p>copy_back_peer_weight 就是前面提到的回拷贝操作。</p>
+<pre><code class="language-rust">impl DecentralizedFullPrecisionSynchronous {
+  
+    pub fn copy_back_peer_weight(&amp;self, bucket: Arc&lt;BaguaBucket&gt;) { // 拷贝回去
+        let bucket_guard = bucket.inner.lock();
+        let stream_ptr = self.communicator.stream_ptr();
+
+        let mut communication_tensor =
+            bucket_guard.get_communication_tensor(stream_ptr, false, false);
+
+        self.communicator.execute_communication(
+            &amp;mut communication_tensor,
+            false,
+            false,
+            true,
+            &amp;mut |c, t| {
+                t.raw
+                    .clone_from(self.peer_weight.inner.read().raw.as_ref(), c.stream_ptr);
+            },
+        );
+    }
+}
+</code></pre>
+<p>我们再给出一个示意图。</p>
+<pre><code class="language-python">+---------------------------------------------------------------------+
+|DecentralizedAlgorithmImpl                                           |
+|                                                                     |
+|     process_group                                                   |
+|                                                                     |
+|     decentralized_op = bucket.append_decentralized_synchronous_op   |
+|                                                 +                   |
+|     peer_selection_mode                         |                   |
+|                                                 |                   |
+|     init_post_backward_hook                     |                   |
+|              ^                                  |                   |
+|              |                                  |                   |
+|              |                                  |                   |
++---------------------------------------------------------------------+
+               |                                  |
+               |                                  |
++-----------------------------------------------------------+         +----------+
+| BaguaBucket  |                                  |         |         | Worker 0 |
+|              |                                  |         |         +----------+
+|              |                                  v         |
+|              |                                            |         +----------+
+|              |    DecentralizedFullPrecisionSynchronous { |         | Worker 1 |
+|              |                                            |         +----------+
+|              |         PeerSelectionMode::ShiftOne {      |
+|              |                                            |   peer2 +----------+
+|              |            c.send(&amp;t.raw, peer_rank);+--------+----&gt; | Worker 2 |
+|              |            c.recv(peer_tensor, peer_rank)  |  |      +----------+
+|              |         }                                  |  |
+|              |    }                                       |  |peer3 +----------+
+|              |                                            |  +----&gt; | Worker 3 |
+|              |                                            |  |      +----------+
+|              |                                            |  |
+|              +--+ copy_back_peer_weight                   |  |peer4 +----------+
+|                                                           |  +----&gt; | Worker 4 |
++-----------------------------------------------------------+         +----------+
+</code></pre>
+<h2 id="0x03-异步">0x03 异步</h2>
+<p>关于异步通信，官方文档思路如下：</p>
+<ul>
+<li>
+<blockquote>
+<p>同步或是异步（Synchronous or Asynchronous）：同步模式中，在每一次迭代过程中，所有工作节点都需要进行通信，并且下一步迭代必须等待当前迭代的通信完成才能开始。反之，异步式分布算法 [2] 则不需要等待时间：当某个节点完成计算后就可直接传递本地梯度，进行模型更新。</p>
+</blockquote>
+</li>
+</ul>
+<p>我们接下来用 <a href="https://tutorials.baguasys.com/algorithms/async-model-average" target="_blank" rel="noopener nofollow">https://tutorials.baguasys.com/algorithms/async-model-average</a> 结合代码来分析学习。</p>
+<h3 id="31-示例用法">3.1 示例用法</h3>
+<p>首先初始化八卦算法：</p>
+<pre><code class="language-python">from bagua.torch_api.algorithms import async_model_average
+algorithm = async_model_average.AsyncModelAverageAlgorithm()
+</code></pre>
+<p>然后对模型使用算法</p>
+<pre><code class="language-python">model = model.with_bagua([optimizer], algorithm)
+</code></pre>
+<p>与运行同步算法不同，您需要在训练过程完成时（例如，当您要运行测试时）明确停止通信线程：</p>
+<pre><code class="language-python">model.bagua_algorithm.abort(model)
+</code></pre>
+<p>要在再次开始训练时恢复通信线程，请执行以下操作：</p>
+<pre><code class="language-python">model.bagua_algorithm.resume(model)
+</code></pre>
+<h3 id="32-异步模型平均">3.2 异步模型平均</h3>
+<p>在Gradient AllReduce 等同步通信算法中，同一迭代中每个 worker 都需要以锁步（lock-step）方式运作。当系统中没有落后者（straggler）时，这种同步算法相当有效，并可以提供更容易推理的确定性训练结果。然而，当系统中存在落后者时，使用同步算法时，更快的 worker 必须在每次迭代中等待最慢的 worker，这会极大地损害整个系统的性能。为了处理掉队者，我们可以使用异步算法，其中 worker 不需要同步。八卦提供的<em>异步模型平均</em>算法就是这样的异步算法。</p>
+<h3 id="33-算法">3.3 算法</h3>
+<p>在<em>异步模式平均</em>算法可以被描述为如下：</p>
+<p>每个 worker 都维护一个本地模型 <strong>X</strong>.  第 i 个  worker 维护 $ x^{(i)}$ ，每个 worker 并行运行两个线程。第一个线程进行梯度计算（称为计算线程），另一个线程进行通信（称为通信线程）。对于每个 worker i， 有一个锁 <span class="math inline">\(m_i\)</span>，控制对其模型的访问。</p>
+<p>第 i 个 worker 上的计算线程重复以下步骤：</p>
+<ol>
+<li>获取锁 <span class="math inline">\(m_i\)</span>。</li>
+<li>在一批输入数据上计算局部梯度 $∇ F (x^{(i)}) $。</li>
+<li>释放锁  <span class="math inline">\(m_i\)</span>.</li>
+<li>用局部梯度更新模型，$x^{(i)} = x^{(i)} - γ∇ F (x^{(i)}) $。</li>
+</ol>
+<p>第 i 个 worker 上的通信线程重复以下步骤：：</p>
+<ol>
+<li>获取锁 <span class="math inline">\(m_i\)</span>。</li>
+<li>与所有其他 worker 的模型通信以平均本地模型<span class="math inline">\(X^{(i)}\)</span>： <span class="math inline">\(X^{(i)} = \frac{1}{n} \sum^n_{j=1}X^{(j)}\)</span></li>
+<li>释放锁  <span class="math inline">\(m_i\)</span>.</li>
+</ol>
+<p>每个 worker 独立并发地运行这两个线程。</p>
+<h3 id="34-分析">3.4 分析</h3>
+<p>大家可以看到，本质上就是计算线程和通信线程都是自己操作，但是依赖锁进行彼此协调，达到了异步的目的。</p>
+<h4 id="341-异步通信实现">3.4.1 异步通信实现</h4>
+<p>AsyncModelAverageAlgorithmImpl 是异步通信的实现。</p>
+<pre><code class="language-python">class AsyncModelAverageAlgorithmImpl(AlgorithmImpl):
+    def __init__(
+        self,
+        process_group: BaguaProcessGroup,
+        peer_selection_mode: str = "all",
+        sync_interval_ms: int = 500,
+        warmup_steps: int = 0,
+    ):
+        """
+        Implementation of the
+        `AsyncModelAverage &lt;https://tutorials.baguasys.com/algorithms/async-model-average.html&gt;`_
+        algorithm.
+
+        The asynchronous implementation is experimental, and imposes some restrictions.
+        With such asynchronous algorithm, the number of iterations on each worker are different. Therefore
+        the current implementation assumes that the dataset is an endless stream, and all workers continuously
+        synchronize between each other.
+
+        Users should call :meth:`abort` to manually stop the algorithm's continuous synchronization process.
+        For example, for a model wrapped with `.with_bagua(...)`, you can abort with `model.bagua_algorithm.abort(model)`,
+        and resume with `model.bagua_algorithm.resume(model)`.
+
+        Args:
+            process_group (BaguaProcessGroup): The process group to work on.
+            peer_selection_mode (str): The way how workers communicate with each other. Currently ``"all"`` is supported.
+                ``"all"`` means all workers' weights are synchronized during each communication.
+            sync_interval_ms (int): Number of milliseconds between model synchronizations.
+            warmup_steps (int): Number of steps to warm up by doing gradient allreduce before doing asynchronous
+                model averaging. Use 0 to disable.
+        """
+
+        super(AsyncModelAverageAlgorithmImpl, self).__init__(process_group)
+        self.peer_selection_mode = peer_selection_mode
+        self.sync_interval_ms = sync_interval_ms
+        self.step_id = 0
+        self.warmup_steps = warmup_steps
+        self.cuda_event = torch.cuda.Event()
+        self.abort_event = threading.Event()
+        self.dummy_tensor = torch.Tensor([0]).byte().cuda()
+
+        # 线程池
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self.scheduled = False
+
+        process_ranks = list(_pg_group_ranks[self.process_group])
+        self.thread_group = new_group(
+            process_ranks, stream=torch.cuda.Stream(priority=-1)
+        )
+</code></pre>
+<h4 id="342-初始化操作">3.4.2 初始化操作</h4>
+<p>init_operations 的 这部分调用是在 _bagua_reset_algorithm_buckets 之中，每个 BaguaModule 都会做设置，主要是设置：热身时期是同步操作/其他时间是异步操作，这里忽略了大部分代码。</p>
+<pre><code class="language-python">def _bagua_reset_algorithm_buckets(self):
+    self._bagua_cleanup_algorithm()
+    raw_buckets = self._bagua_autotune_get_buckets()
+    self.bagua_buckets.extend(self.bagua_algorithm.tensors_to_buckets(raw_buckets))
+
+    for name, param in self.named_parameters():
+        # 忽略 real_hook_factory 定义
+        if param.requires_grad:
+            param_tmp = param.expand_as(param)
+            grad_acc = param_tmp.grad_fn.next_functions[0][0]
+            hook = grad_acc.register_hook(real_hook_factory(name, param))
+            hook.grad_acc = grad_acc
+            self._bagua_algorithm_hooks.append(hook)
+
+    optimizer_hook = self.bagua_algorithm.init_post_optimizer_step_hook(self)
+
+    for optimizer in self.bagua_optimizers:
+        if not hasattr(optimizer, "_bagua_original_step"):
+            optimizer._bagua_original_step = optimizer.step
+        # 忽略 new_step_factory 定义
+        optimizer.step = new_step_factory(optimizer)
+
+    for bucket in self.bagua_buckets:
+        self.bagua_algorithm.init_operations( # 这里调用对算法的初始化操作
+            self,
+            bucket,
+        )
+    self._bagua_backend.register_ordered_buckets(
+        [bucket.backend_bucket for bucket in self.bagua_buckets]
+    )
+</code></pre>
+<p>就是对于<u>除了热身期间之外，每个桶都设定了异步通信</u>。</p>
+<pre><code class="language-python">def init_operations(
+    self,
+    bagua_module: BaguaModule,
+    bucket: BaguaBucket,
+):
+    bagua_module._bagua_backend.wait_pending_comm_ops()
+    bucket.clear_ops()
+
+    if self.step_id &lt; self.warmup_steps:
+        bucket.append_centralized_synchronous_op( # 热身时期是同步操作
+            hierarchical=False,
+            average=True,
+            group=self.process_group,
+        )
+    else:
+        # 其他时间是异步操作
+        async_op = bucket.append_asynchronous_model_average_op(
+            peer_selection_mode=self.peer_selection_mode, group=self.thread_group
+        )
+        bucket._async_op = async_op
+</code></pre>
+<h4 id="343-加锁解锁">3.4.3 加锁解锁</h4>
+<p>我们接下来看看加锁释放锁的基础操作。bagua/torch_api/algorithms/async_model_average.py 之中有：</p>
+<pre><code class="language-python">def _lock_model(self, bagua_module: BaguaModule):
+    torch.cuda.current_stream().record_event(self.cuda_event)
+    self.cuda_event.synchronize() # CUDA同步操作
+
+    for bucket in bagua_module.bagua_buckets:
+        bucket._async_op.lock_weight() # 加锁操作
+
+def _unlock_model(self, bagua_module: BaguaModule):
+    torch.cuda.current_stream().record_event(self.cuda_event)
+    self.cuda_event.synchronize() # CUDA同步操作
+
+    for bucket in bagua_module.bagua_buckets:
+        bucket._async_op.unlock_weight() # 释放锁
+</code></pre>
+<p>lock_weight 和 unlock_weight 的实现在 rust 代码之中。</p>
+<pre><code class="language-rust">impl DecentralizedFullPrecisionAsynchronous {
+    pub fn lock_weight(&amp;self) {
+        let raw_mutex = unsafe { self.weight_mutex.raw() };
+        raw_mutex.lock();
+    }
+
+    pub fn unlock_weight(&amp;self) {
+        unsafe {
+            let raw_mutex = self.weight_mutex.raw();
+            raw_mutex.unlock();
+        };
+    }
+}
+</code></pre>
+<h4 id="344-计算线程">3.4.4 计算线程</h4>
+<p>计算线程之中，和加锁解锁关键步骤如下：</p>
+<h5 id="3441-前向传播">3.4.4.1 前向传播</h5>
+<p>前向传播时候，先进行加锁，如果异步循环通信线程没有启动，则会进行启动。</p>
+<pre><code class="language-python">def init_forward_pre_hook(self, bagua_module: BaguaModule):
+    def hook(input):
+        if (
+            self.step_id &gt; self.warmup_steps
+            and self.sync_interval_ms &gt; 0  # noqa: W503
+        ):
+            self._lock_model(bagua_module) # 枷锁
+
+            if not hasattr(self, "future"):
+                self.future = self.executor.submit(
+                    self._run_async_loop, bagua_module # 启动异步循环通信线程
+                )
+                self.scheduled = True
+
+    return hook
+</code></pre>
+<h5 id="3442-后向传播">3.4.4.2 后向传播</h5>
+<p>后向传播结束之后，会对锁进行释放，就是说，<u>前向传播时候加锁启动线程，后向传播时候解锁，这期间进行计算</u>。</p>
+<pre><code class="language-python">def init_backward_hook(self, bagua_module: BaguaModule):
+    def hook(parameter_name, parameter):
+        if self.step_id &lt;= self.warmup_steps:
+            parameter._bagua_grad.bagua_mark_communication_ready() # 通知后端可以通信
+
+    return hook
+
+def init_post_backward_hook(self, bagua_module: BaguaModule):
+    def hook():
+        if self.step_id &lt;= self.warmup_steps:
+            bagua_module._bagua_backend.wait_pending_comm_ops() # 等待
+        else:
+            self._unlock_model(bagua_module) # 解锁
+
+    return hook
+</code></pre>
+<p>此时逻辑如下：</p>
+<pre><code class="language-python">+---------------------------------------------------------------------------+
+| AsyncModelAverageAlgorithmImpl                                            |
+|                                                                           |
+|  +-----------------------------+                 +----------------------+ |
+|  | Computation thread          |                 | BaguaBucket          | |
+|  |                             | set async_op    |  +----------------+  | |
+|  |    init_operations   +----------------------&gt; |  | _async_op      |  | |
+|  |                             |                 |  |                |  | |
+|  |                             | lock_weight()   |  |                |  | |
+|  |    init_forward_pre_hook +------------------&gt; |  |                |  | |
+|  |                             | unlock_weight() |  |                |  | |
+|  |    init_post_backward_hook+-----------------&gt; |  |                |  | |
+|  |                             |                 |  |                |  | |
+|  |                             |                 |  +----------------+  | |
+|  +-----------------------------+                 +----------------------+ |
+|                                                                           |
+|  +-----------------------------+                                          |
+|  | Communation thread          |                                          |
+|  |                             |                                          |
+|  | _run_async_loop             |                                          |
+|  |                             |                                          |
+|  |                             |                                          |
+|  +-----------------------------+                                          |
+|                                                                           |
++---------------------------------------------------------------------------+
+</code></pre>
+<h4 id="345-通信线程">3.4.5 通信线程</h4>
+<p>通信线程主循环如下，主要是<u>通知后端，进行通信</u>。</p>
+<pre><code class="language-python">def _run_async_loop(self, bagua_module: BaguaModule):
+    comm_step = 0
+    while True:
+        state = self._negotiate()
+        if state == _AsyncInternalState.ABORT:
+            break
+
+        start_time = time.time()
+        for bucket in bagua_module.bagua_buckets: # 遍历桶
+            for tensor in bucket.tensors: # 遍历张量
+                # 通知后端，进行通信
+                tensor.bagua_mark_communication_ready_without_synchronization() 
+
+        bagua_module._bagua_backend.wait_pending_comm_ops()
+        duration = (time.time() - start_time) * 1000
+
+        comm_step += 1
+        time.sleep(self.sync_interval_ms / 1000)
+</code></pre>
+<h5 id="3451通知后端">3.4.5.1通知后端</h5>
+<h6 id="python">Python</h6>
+<p>bagua_mark_communication_ready_without_synchronization 的实现如下，调用后端的 mark_communication_ready。</p>
+<pre><code class="language-python">def bagua_mark_communication_ready_without_synchronization(self):
+    """
+    Mark a Bagua tensor ready immediately, without `CUDA event &lt;https://pytorch.org/docs/stable/generated/torch.cuda.Event.html?highlight=event#torch.cuda.Event&gt;`_ synchronization.
+    """
+    self.bagua_backend.mark_communication_ready(
+        self._bagua_backend_tensor,
+        0,
+    )
+</code></pre>
+<h6 id="rust">Rust</h6>
+<p>mark_communication_ready 的实现在 rust 之中。位置是 rust/bagua-core/bagua-core-py/src/lib.rs。</p>
+<pre><code class="language-rust">pub fn mark_communication_ready(
+    &amp;mut self,
+    tensor: PyRef&lt;BaguaTensorPy&gt;,
+    ready_cuda_event_ptr: u64,
+    py: Python,
+) -&gt; PyResult&lt;()&gt; {
+    let inner = &amp;tensor.inner;
+    py.allow_threads(|| {
+        self.inner
+            .mark_communication_ready(inner, ready_cuda_event_ptr)
+    })
+    .map_err(|e| PyRuntimeError::new_err(format!("{:?}", e)))
+}
+</code></pre>
+<p>rust/bagua-core/bagua-core-internal/src/lib.rs 之中有：</p>
+<pre><code class="language-rust">pub fn mark_communication_ready(
+    &amp;mut self,
+    tensor: &amp;BaguaTensor,
+    ready_cuda_event_ptr: u64,
+) -&gt; Result&lt;(), BaguaCoreError&gt; {
+    let tracer = global::tracer("bagua-core");
+    let mut span = tracer.start("tensor_ready");
+    span.set_attribute(KeyValue::new("tensor_name", tensor.name()));
+
+    tensor.mark_comm_ready(ready_cuda_event_ptr);
+    while self.should_schedule()? {
+        let bucket = self.ordered_buckets.pop_front().unwrap();
+        bucket.reset_comm_ready();
+        let bucket_clone = bucket.clone();
+        self.ordered_buckets.push_back(bucket);
+        self.schedule_comm(bucket_clone)?;
+    }
+    Ok(())
+}
+</code></pre>
+<p>schedule_comm 在 rust/bagua-core/bagua-core-internal/src/lib.rs 之中。</p>
+<pre><code class="language-rust">pub fn schedule_comm(&amp;self, bucket: Arc&lt;BaguaBucket&gt;) -&gt; Result&lt;(), BaguaCoreError&gt; {
+    let event_channel = BaguaEventChannel::new("comm_op");
+    self.channels
+        .schedule_channel_sender
+        .send(BaguaScheduledCommOp {
+            name: format!("comm op for bucket {}", bucket.name),
+            ops: {
+                let guard = bucket.inner.lock();
+                guard.comm_ops.clone() // 获取bucket的op，进行调用
+            },
+            bucket,
+            event_channel: event_channel.clone(),
+        })
+        .map_err(|e| BaguaCoreError::InternalChannelError(format!("{:?}", e)))?;
+    Ok(self
+        .channels
+        .not_waited_events_sender
+        .send(event_channel)
+        .map_err(|e| BaguaCoreError::InternalChannelError(format!("{:?}", e)))?)
+}
+</code></pre>
+<p>发送了一个 BaguaScheduledCommOp。</p>
+<pre><code class="language-python">pub struct BaguaScheduledCommOp {
+    pub name: String,
+    pub bucket: Arc&lt;BaguaBucket&gt;,
+    pub ops: Vec&lt;Arc&lt;dyn CommOpTrait + Send + Sync&gt;&gt;,
+    pub event_channel: BaguaEventChannel,
+}
+</code></pre>
+<p>逻辑如下：</p>
+<pre><code class="language-python">+---------------------------------------------------+    +----------------------------+
+| AsyncModelAverageAlgorithmImpl                    |    | BaguaBucket                |
+|                                                   |    | +------------------------+ |
+|  +-----------------------------+                  |    | | _async_op              | |
+|  | Computation thread          |                  |    | |                        | |
+|  |                             |    set async_op  |    | |                        | |
+|  |    init_operations   +----------------------------&gt; | |                        | |
+|  |                             |                  |    | |                        | |
+|  |                             |    lock_weight() |    | |                        | |
+|  |    init_forward_pre_hook +------------------------&gt; | |                        | |
+|  |                             |   unlock_weight()|    | |                        | |
+|  |    init_post_backward_hook+-----------------------&gt; | |                        | |
+|  |                             |                  |    | +------------------------+ |
+|  |                             |                  |    +----------------------------+
+|  +-----------------------------+                  |
+|  +---------------------------------+              |
+|  | Communation thread              |              |    +----------------------------+
+|  | +-----------------------------+ |              |    | BaguaCommBackendPy         |
+|  | |                             | |              |    |                            |
+|  | | _run_async_loop    +----------------------------&gt; |   mark_communication_ready |
+|  | |                             | |              |    |            +               |
+|  | +-----------------------------+ |              |    |            |               |
+|  +---------------------------------+              |    |            v               |
++---------------------------------------------------+    |      schedule_comm         |
+                                                         |                            |
+                                                         +----------------------------+
+</code></pre>
+<h5 id="3452-归并">3.4.5.2 归并</h5>
+<p>schedule_comm 最终会调用到 bucket.comm_ops，该变量在初始化时候被配置为 DecentralizedFullPrecisionAsynchronous，所以我们需要回头来一步一步看看如何归并。</p>
+<p>前面初始化操作时候有使用 bucket.append_asynchronous_model_average_op 进行配置。</p>
+<pre><code class="language-python">def init_operations(
+    self,
+    bagua_module: BaguaModule,
+    bucket: BaguaBucket,
+):
+    bagua_module._bagua_backend.wait_pending_comm_ops()
+    bucket.clear_ops()
+
+    if self.step_id &lt; self.warmup_steps:
+        bucket.append_centralized_synchronous_op( # 热身时期是同步操作
+            hierarchical=False,
+            average=True,
+            group=self.process_group,
+        )
+    else:
+        # 其他时间是异步操作
+        async_op = bucket.append_asynchronous_model_average_op( # 进行归并配置
+            peer_selection_mode=self.peer_selection_mode, group=self.thread_group
+        )
+        bucket._async_op = async_op
+</code></pre>
+<h6 id="python-1">Python</h6>
+<p>append_asynchronous_model_average_op 代码在 bagua/torch_api/bucket.py。其作用是：</p>
+<ul>
+<li>
+<p>将异步模型归并操作附加到bucket。此操作将在训练模型时启用  worker 之间的连续模型平均。当bucket中的所有张量都标记为ready时，操作将由Bagua后端按照追加的顺序执行。</p>
+</li>
+<li>
+<p>此操作旨在与计算过程并行运行。它返回对op的引用。op具有独占访问模型的锁。调用<code>op.lock_weight()</code>获取锁，调用<code>op.unlock_weight()</code>释放锁。</p>
+</li>
+<li>
+<p>重点在于，张量 ready 之后进行操作。</p>
+</li>
+</ul>
+<pre><code class="language-python">def append_asynchronous_model_average_op(
+    self, peer_selection_mode: str, group: Optional[BaguaProcessGroup] = None
+):
+
+    """
+    Append an asynchronous model average operation to a bucket. This operation will enable continuous
+    model averaging between workers while training a model.
+
+    The operations will be executed by the Bagua backend in the order they are appended
+    when all the tensors within the bucket are marked ready.
+
+    This operation is intended to run in parallel with the computation process. It returns a reference
+    to the op. The op features a lock to exclusively access the model. Call ``op.lock_weight()`` to
+    acquire the lock and ``op.unlock_weight()`` to release it.
+
+    Args:
+        peer_selection_mode (str): The way how workers communicate with each otehr. Currently ``"all"`` is supported.
+            ``"all"`` means all workers' weights are averaged during each communication.
+        group: The process group to work on. If ``None``, the default process group will be used.
+    Returns:
+        The asynchronous model average operation itself.
+    """
+    if group is None:
+        group = _get_default_group()
+
+    return self.backend_bucket.append_decentralized_asynchronous_op(
+        _bagua_backend_comm(group.get_global_communicator()),
+        None,
+        peer_selection_mode=peer_selection_mode,
+        torch_stream=torch.cuda.current_stream().cuda_stream,
+    )
+</code></pre>
+<h6 id="rust-1">Rust</h6>
+<p>append_decentralized_asynchronous_op 函数在 rust 之中，其调用了 DecentralizedFullPrecisionAsynchronous，就是往 bucket.comm_ops 之上添加了一个 DecentralizedFullPrecisionAsynchronous。</p>
+<pre><code class="language-rust">    pub fn append_decentralized_asynchronous_op(
+        &amp;mut self,
+        communicator_internode: Option&lt;&amp;BaguaSingleCommunicator&gt;,
+        communicator_intranode: Option&lt;&amp;BaguaSingleCommunicator&gt;,
+        peer_selection_mode: String,
+        torch_stream: u64,
+    ) -&gt; Arc&lt;DecentralizedFullPrecisionAsynchronous&gt; {
+        let communicator =
+            BaguaCommunicator::new(communicator_internode, communicator_intranode, false)
+                .expect("cannot create communicator");
+
+        let comm_op = Arc::new(DecentralizedFullPrecisionAsynchronous {
+            communicator,
+            peer_selection_mode: match peer_selection_mode.as_str() {
+                "all" =&gt; PeerSelectionMode::All,
+                &amp;_ =&gt; {
+                    unimplemented!("unsupported peer_selection_mode for decentralized asynchronous algorithm (should be `all`)")
+                }
+            },
+            torch_stream,
+            weight_mutex: Arc::new(Mutex::new(true)),
+        });
+
+        self.inner
+            .lock()
+            .comm_ops // 插入到 bucket 的 comm_ops
+            .push(comm_op.clone() as Arc&lt;dyn CommOpTrait + Send + Sync&gt;);
+
+        comm_op
+    }
+</code></pre>
+<p>DecentralizedFullPrecisionAsynchronous 里面有加锁，释放锁，CUDA 同步操作等等，恰好与前面提到的前向传播/后向传播对应。</p>
+<pre><code class="language-rust">impl CommOpTrait for DecentralizedFullPrecisionAsynchronous {
+    fn execute_background_communication(
+        &amp;self,
+        bucket: Arc&lt;BaguaBucket&gt;,
+        comm_op_channels: &amp;BaguaCommOpChannels,
+    ) {
+        let bucket_guard = bucket.inner.lock();
+
+        let comm_stream = self.communicator.stream_ptr();
+
+        let mut communication_tensor = match &amp;self.communicator {
+            BaguaCommunicator::SingleCommunicator(_) =&gt; {
+                bucket_guard.get_communication_tensor(comm_stream, false, false)
+            }
+            BaguaCommunicator::HierarchicalCommunicator(x) =&gt; {
+                panic!("asynchronous op only accepts non-hierarchical communicator");
+            }
+        };
+
+        let peer_mode = &amp;self.peer_selection_mode;
+
+        let torch_stream = self.torch_stream;
+
+        self.communicator.execute_communication(
+            &amp;mut communication_tensor,
+            false,
+            false,
+            false,
+            &amp;mut |c, t| {
+                let start_time = std::time::Instant::now();
+   
+                let temp_buf = CUDA_DEVICE_MEMORY_POOL[t.raw.device_id()]
+                    .try_pull(t.raw.num_elements_allocated() * t.raw.dtype().bytes())
+                    .expect("cannot allocate cuda memory");
+
+                let mut temp_tensor = BaguaTensorRaw {
+                    ptr: temp_buf.ptr,
+                    num_elem_allocated: t.raw.num_elements_allocated(),
+                    dtype: t.raw.dtype().clone(),
+                    num_elem: t.raw.num_elements(),
+                    device_id: t.raw.device_id(),
+                    pool_allocations: vec![Arc::new(temp_buf)],
+                };
+
+                let reduced_buf = CUDA_DEVICE_MEMORY_POOL[t.raw.device_id()]
+                    .try_pull(t.raw.num_elements_allocated() * t.raw.dtype().bytes())
+                    .expect("cannot allocate cuda memory");
+
+                let mut reduced_tensor = BaguaTensorRaw {
+                    ptr: reduced_buf.ptr,
+                    num_elem_allocated: t.raw.num_elements_allocated(),
+                    dtype: t.raw.dtype().clone(),
+                    num_elem: t.raw.num_elements(),
+                    device_id: t.raw.device_id(),
+                    pool_allocations: vec![Arc::new(reduced_buf)],
+                };
+
+                let src_ready_event = CUDA_EVENT_POOL.take().event;
+
+                // use default stream to copy weights
+                temp_tensor.clone_from(&amp;t.raw, torch_stream as u64);
+
+                unsafe {
+                    cpp::cpp!([
+                        src_ready_event as "cudaEvent_t",
+                        comm_stream as "cudaStream_t",
+                        torch_stream as "cudaStream_t"]
+                    {
+                        CUDACHECK(cudaEventRecord(src_ready_event, torch_stream));
+                        CUDACHECK(cudaStreamWaitEvent(comm_stream, src_ready_event , 0));
+                    });
+                }
+
+                match peer_mode {
+                    PeerSelectionMode::All =&gt; {
+                        c.allreduce(&amp;temp_tensor, &amp;mut reduced_tensor, BaguaReductionOp::SUM);
+                    }
+                    PeerSelectionMode::Ring =&gt; {
+                        unimplemented!()
+                    }
+                    PeerSelectionMode::ShiftOne =&gt; {
+                        unimplemented!()
+                    }
+                };
+
+                {
+                    // 获取 ready event
+                    let ready_event = CUDA_EVENT_POOL.take().event;
+                    unsafe {
+                        cpp::cpp!([
+                            ready_event as "cudaEvent_t",
+                            comm_stream as "cudaStream_t"]
+                        {
+                            // CUDA 同步操作
+                            CUDACHECK(cudaEventRecord(ready_event, comm_stream));
+                            CUDACHECK(cudaEventSynchronize(ready_event));
+                        });
+                    }
+
+                    self.lock_weight(); // 加锁
+                  
+                    t.raw.async_model_average(
+                        &amp;reduced_tensor,
+                        &amp;temp_tensor,
+                        c.nranks as f32,
+                        comm_stream,
+                    );
+
+                    unsafe {
+                        cpp::cpp!([
+                            ready_event as "cudaEvent_t",
+                            comm_stream as "cudaStream_t"]
+                        {
+                            // 对CUDA进行操作
+                            CUDACHECK(cudaEventRecord(ready_event, comm_stream));
+                            CUDACHECK(cudaEventSynchronize(ready_event));
+                        });
+                    }
+                    self.unlock_weight(); // 解锁
+                }
+
+                tracing::debug!(
+                    "#{} async model average update cost: {:?}",
+                    c.rank,
+                    start_time.elapsed()
+                );
+            },
+        );
+    }
+}
+
+</code></pre>
+<p>在 rust/bagua-core/bagua-core-internal/kernels/bagua_kernels.cu 之中有最终操作。</p>
+<pre><code class="language-cpp">__global__ void async_model_average(float *tensor, const float *reduced_tensor_copy, 
+      const float *tensor_copy, const float nranks, const int N) {
+    for (int i = blockIdx.x * blockDim.x + threadIdx.x; i &lt; N; i += blockDim.x * gridDim.x) {  
+   tensor[i] += reduced_tensor_copy[i] / nranks - tensor_copy[i];
+    }
+}
+</code></pre>
+<p>我们总结逻辑如下：</p>
+<ul>
+<li>（1）init_operations 会进行一系列调用，生成了一个DecentralizedFullPrecisionAsynchronous，赋值在bucket 的 comm_ops 和 aysnc_op 之上。</li>
+</ul>
+<p>计算线程之中做如下操作：</p>
+<ul>
+<li>（2）计算线程之中，在前向传播之前设置了hook，其中会 lock weight。</li>
+<li>（3）计算线程之中，在后向传播之前设置了hook，其中会 unlock weight。</li>
+</ul>
+<p>通讯线程之中做如下操作：</p>
+<ul>
+<li>（4）会调用 mark_communication_ready 进行通信设置。</li>
+<li>（5）mark_communication_ready 最终调用到  schedule_comm，其会启动 bucket.comm_ops，bucket.comm_ops 就是 DecentralizedFullPrecisionAsynchronous。</li>
+<li>DecentralizedFullPrecisionAsynchronous 之中会：
+<ul>
+<li>（6）lock weight。</li>
+<li>（7）会进行异步模型归并。</li>
+<li>（8）会 unlock weight。</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-python">  +---------------------------------------------------+   +----------------------+    +----------------------------------------+
+  | AsyncModelAverageAlgorithmImpl                    |   |  BaguaBucket         |    | DecentralizedFullPrecisionAsynchronous |
+  |                                                   |   |                 1    |    |                                        |
+  |  +-----------------------------+                  |   |       comm_ops +--------&gt; |  6   self.lock_weight()                |
+  |  | Computation thread          |  1 set async_op  |   |                      |    |                                        |
+  |  |                             |                  |   |    +--------------+  |    |                                        |
+  |  |    init_operations   +----------------------------&gt;+    | _async_op  1 |  |    |  7   t.raw.async_model_average(        |
+  |  |                             |                  |   |    |           +--------&gt; |                &amp;reduced_tensor,        |
+  |  |                             |                  |   |    |              |  |    |                &amp;temp_tensor,           |
+  |  |                             |                  |   |    |              |  |    |                c.nranks as f32,        |
+  |  |                             |                  |   |    |              |  |    |                comm_stream,            |
+  |  |                             |  2 lock_weight() |   |    |              |  |    |            );                          |
+  |  |    init_forward_pre_hook +----------------------------&gt; |              |  |    |                                        |
+  |  |                             | 3 unlock_weight()|   |    |              |  |    |                                        |
+  |  |    init_post_backward_hook+---------------------------&gt; |              |  |    |  8   self.unlock_weight()              |
+  |  |                             |                  |   |    +--------------+  |    |                                        |
+  |  |                             |                  |   |                      |    +--------+-------------------------------+
+  |  +-----------------------------+                  |   +----------------------+             ^
+  |                                                   |                                        |
++--------------------------------------------------------------------------------------------------------------------------------+
+  |                                                   |                                        |
+  |  +---------------------------------+              |                                        |
+  |  | Communation thread              |              |   +-----------------------------+      |
+  |  | +-----------------------------+ |              |   |  BaguaCommBackendPy         |      |
+  |  | |                             | |     4        |   |                             |      |
+  |  | | _run_async_loop    +--------------------------------&gt; mark_communication_ready |      |
+  |  | |                             | |              |   |             +               |      | 5
+  |  | +-----------------------------+ |              |   |             |               |      |
+  |  +---------------------------------+              |   |             v               |      |
+  +---------------------------------------------------+   |       schedule_comm         |      |
+                                                          |             +               |      |
+                                                          |             |               |      |
+                                                          |             v               |      |
+                                                          |       bucket.comm_ops  +-----------+
+                                                          |                             |
+                                                          +-----------------------------+
+</code></pre>
+<p>手机如下：</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104214834813-1831597590.png" alt="" loading="lazy"></p>
+<p>或者我们换一个角度来看，就是左右两个线程都操作桶，通过锁来协调竞争，特色除了锁之外，就在DecentralizedFullPrecisionAsynchronous 之中。这里需要注意的是，数值 1 的意义是设置，就是 bucket 的 _async_op 和 comm_ops 都配置成 DecentralizedFullPrecisionAsynchronous，最后通讯线程之中（4）会调用 mark_communication_ready 进行通信设置。</p>
+<pre><code class="language-python">                                                                                                                             +-------------------------+
+                                                 +----------------------+                                                    | Communation thread      |
+                                                 |  BaguaBucket         |                                                    | +---------------------+ |
+                                                 |                      | 1                                                  | |                     | |
++---------------------------+                    |       comm_ops +--------------------------------+                         | | _run_async_loop     | |
+| Computation thread        |  1 set async_op    |                      |                          |                         | |          +          | |
+|                           |                    |    +--------------+  |                          |                         | |          |          | |
+|  init_operations   +--------------------------&gt;+    | _async_op    |  | 1                        |                         | +---------------------+ |
+|                           |                    |    |           +------------------+             |                         +-------------------------+
+|                           |                    |    |              |  |            |             |                                      |
+|                           |                    |    |              |  |            |             |                                      |
+|                           |                    |    |              |  |            v             v                                      v
+|                           |  2 lock_weight()   |    |              |  |     +------+-------------+-------------------+    +-------------+---------------+
+|  init_forward_pre_hook +--------------------------&gt; |              |  |     | DecentralizedFullPrecisionAsynchronous |    |  BaguaCommBackendPy         |
+|                           |                    |    |              |  | 6   |                                        |    |                             |
+|                           |                    |    |              +&lt;------------+ self.lock_weight()                |    |    mark_communication_ready |
+|                           |                    |    |              |  |     |                                        |    |             +               |
+|                           |                    |    |              |  |     |  7   t.raw.async_model_average(        |    |             |               |
+|                           |                    |    |              |  |     |                &amp;reduced_tensor,        |    |             v               |
+|                           |                    |    |              |  |     |                &amp;temp_tensor,           |    |       schedule_comm         |
+|                           |                    |    |              |  |     |                c.nranks as f32,        |    |             +               |
+|                           |                    |    |              |  |     |                comm_stream,            |    |             |               |
+|                           |                    |    |              |  |     |            );                          |  4 |             v               |
+|                           |                    |    |              |  | 8   |                                        +&lt;--------+  bucket.comm_ops       |
+|                           | 3 unlock_weight()  |    |              +&lt;-----------+  self.unlock_weight()              |    |                             |
+|  init_post_backward_hook+-------------------------&gt; |              |  |     |                                        |    +-----------------------------+
+|                           |                    |    |              |  |     +----------------------------------------+
+|                           |                    |    +--------------+  |
+|                           |                    |                      |
++---------------------------+                    +----------------------+
+</code></pre>
+<p>手机如下：</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104214851253-1190308173.png" alt="" loading="lazy"></p>
+<p>至此，八卦框架分析完毕，这个框架无论是论文，代码，文档，介绍网站，PPT都非常给力，推荐有兴趣的朋友继续深入研究。</p>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="http://blog.ezyang.com/2019/05/pytorch-internals/" target="_blank" rel="noopener nofollow">PyTorch internals</a></p>
+<p><a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a></p>
+<p><a href="https://arxiv.org/pdf/2107.01499.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2107.01499.pdf</a></p>
+<p><a href="https://tutorials.baguasys.com/algorithms/decentralized" target="_blank" rel="noopener nofollow">https://tutorials.baguasys.com/algorithms/decentralized</a></p>
+<p>[1] Dean, Jeffrey, Greg S. Corrado, Rajat Monga, Kai Chen, Matthieu Devin, Quoc V. Le, Mark Z. Mao et al. “Large scale distributed deep networks.” (2012).</p>
+<p>[2] Zhengyuan Zhou, Panayotis Mertikopoulos, Nicholas Bambos, Peter Glynn, Yinyu Ye, Li-Jia Li, and Li Fei-Fei. 2018. Distributed asynchronous optimization with unbounded delays: How slow can you go?. In International Conference on Machine Learning. PMLR, 5970–5979.</p>
+<p>[3] DanAlistarh, DemjanGrubic, JerryLi, RyotaTomioka, and MilanVojnovic. 2016. QSGD: Communication-efficient SGD via gradient quantization and encoding. arXiv preprint arXiv:1610.02132 (2016).</p>
+<p>[4] Dan Alistarh, Torsten Hoefler, Mikael Johansson, Sarit Khirirat, Nikola Konstanti- nov, and Cédric Renggli. 2018. The convergence of sparsified gradient methods. In Proceedings of the 32nd International Conference on Neural Information Processing Systems. 5977–5987.</p>
+<p>[5] Anastasia Koloskova, Sebastian Stich, and Martin Jaggi. 2019. Decentralized stochastic optimization and gossip algorithms with compressed communication. In International Conference on Machine Learning. PMLR, 3478–3487.</p>
+<p>[6] Xiangru Lian, Ce Zhang, Huan Zhang, Cho-Jui Hsieh, Wei Zhang, and Ji Liu. 2017. Can decentralized algorithms outperform centralized algorithms? a case study for decentralized parallel stochastic gradient descent. In Proceedings of the 31st International Conference on Neural Information Processing Systems. 5336–5346.</p>
+<p>[7] Christopher De Sa, Matthew Feldman, Christopher Ré, and Kunle Olukotun. 2017. Understanding and optimizing asynchronous low-precision stochastic gradient descent. In Proceedings of the 44th Annual International Symposium on Computer Architecture. 561–574.</p>
+<p>[8] Xiangru Lian, Wei Zhang, Ce Zhang, and Ji Liu. 2018. Asynchronous decentral- ized parallel stochastic gradient descent. In International Conference on Machine Learning. PMLR, 3043–3052.</p>
+<p>[9] Hanlin Tang, Shaoduo Gan, Ce Zhang, Tong Zhang, and Ji Liu. 2018. Com- munication compression for decentralized training. In Proceedings of the 32nd International Conference on Neural Information Processing Systems. 7663–7673.</p>
+<p>[10] Ji Liu, Ce Zhang, et al. 2020. Distributed Learning Systems with First-Order Methods. Foundations and Trends® in Databases 9, 1 (2020), 1–100.</p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1218.8618284201666" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-01-06 20:13">2022-01-06 20:13</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">1072</span>)&nbsp;
+评论(<span id="post_comment_count">5</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15764264);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15764264', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15764264.html', title: '[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15764264, cb_entryCreatedDate = '2022-01-06 20:13', cb_postType = 1, cb_postTitle = '[源码解析] 快手八卦 --- 机器学习分布式训练新思路(3)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-豆包')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201072501456-2052907165.jpg" onload="countCreativeImpressions('C1-字节-豆包')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDogYcxhshftgTZI_7jHQ_P8dPtTKP4iMIi64d0NaSFf9Y04PYAsb_OnHU1Bvtoeqj6dTLNsiQMAiS29fVRT4nVHWfF0IgjmyEE2w65IEnFT1xzYIpUixT1qsxRC7RPiaOA" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

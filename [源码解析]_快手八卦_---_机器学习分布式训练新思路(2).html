@@ -1,0 +1,1243 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。" />
+    <meta property="og:description" content="“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15764138.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15764138.html",
+      "headline": "[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)",
+      "description": "[源码解析] 快手八卦 机器学习分布式训练新思路(2) 0x00 摘要 “Bagua“ 是快手和苏黎世理工（ETH Z\u0026#252;rich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。其特点是： 并行性能显著提高； 对网络环境更",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-05T21:08:00.0000000&#x2B;08:00",
+      "dateModified": "2022-01-05T21:08:00.0000000&#x2B;08:00",
+      "wordCount": "37367",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15764138;
+            window.currentPostDateAdded = '2022-01-05 21:08';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15764138.html" title="发布于 2022-01-05 21:08">
+    <span role="heading" aria-level="2">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        “Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码解析-快手八卦-----机器学习分布式训练新思路2">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码解析-快手八卦-----机器学习分布式训练新思路2" rel="noopener nofollow">[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-优化" rel="noopener nofollow">0x01 优化</a><ul><li><a href="#11-重叠通信和计算" rel="noopener nofollow">1.1 重叠通信和计算</a></li><li><a href="#12-分桶通信和扁平化" rel="noopener nofollow">1.2 分桶通信和扁平化</a></li><li><a href="#13-分层化通信" rel="noopener nofollow">1.3 分层化通信</a></li></ul></li><li><a href="#0x02-generic-fused-optimizer" rel="noopener nofollow">0x02 Generic Fused Optimizer</a><ul><li><a href="#21-背景知识" rel="noopener nofollow">2.1 背景知识</a><ul><li><a href="#211-tensor" rel="noopener nofollow">2.1.1 Tensor</a></li><li><a href="#212-storage" rel="noopener nofollow">2.1.2 Storage</a></li><li><a href="#213-内部实现" rel="noopener nofollow">2.1.3 内部实现</a></li></ul></li><li><a href="#22-定义" rel="noopener nofollow">2.2 定义</a></li><li><a href="#23-打平" rel="noopener nofollow">2.3 打平</a></li><li><a href="#24-优化" rel="noopener nofollow">2.4 优化</a><ul><li><a href="#241-按照存储分组" rel="noopener nofollow">2.4.1 按照存储分组</a></li><li><a href="#242-重新排序" rel="noopener nofollow">2.4.2 重新排序</a></li></ul></li></ul></li><li><a href="#0x03-分层化-----进程组" rel="noopener nofollow">0x03 分层化 --- 进程组</a><ul><li><a href="#31-设计思路" rel="noopener nofollow">3.1 设计思路</a></li><li><a href="#32-生成进程组" rel="noopener nofollow">3.2 生成进程组</a></li><li><a href="#33-ranks" rel="noopener nofollow">3.3 Ranks</a></li><li><a href="#34-baguaprocessgroup-定义" rel="noopener nofollow">3.4 BaguaProcessGroup 定义</a></li><li><a href="#35-生成-communicator" rel="noopener nofollow">3.5 生成 communicator</a></li><li><a href="#36-使用" rel="noopener nofollow">3.6 使用</a></li></ul></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>“Bagua“ 是快手和苏黎世理工（ETH Zürich）联合开发的分布式训练框架。其专门针对分布式的场景设计特定的优化算法，实现算法和系统层面的联合优化，力图极致化分布式训练的效率。其特点是：</p>
+<ul>
+<li>
+<p>并行性能显著提高；</p>
+</li>
+<li>
+<p>对网络环境更鲁棒；</p>
+</li>
+<li>
+<p>“一键式”使用；</p>
+</li>
+<li>
+<p>分布式通讯算法易拓展性；</p>
+</li>
+<li>
+<p>可用于工业级场景大规模使用；</p>
+</li>
+<li>
+<p>安全、故障易排查；</p>
+</li>
+</ul>
+<p>本文以：</p>
+<ul>
+<li>快手官方公共号文章 <a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a></li>
+<li>“bagua"论文 <a href="https://arxiv.org/pdf/2107.01499.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2107.01499.pdf</a></li>
+<li>“bagua"官方网站 <a href="https://tutorials.baguasys.com/" target="_blank" rel="noopener nofollow">https://tutorials.baguasys.com/</a></li>
+<li>“bagua" 演示文档</li>
+<li><strong>项目 GitHub 地址：</strong><a href="https://github.com/BaguaSys/bagua" target="_blank" rel="noopener nofollow"><strong>https://github.com/BaguaSys/bagua</strong></a></li>
+</ul>
+<p>为基础来分析学习。本文介绍优化方案之中的 Fused Optimizer 和 分层通信。</p>
+<p>前一篇链接为：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15763694.html" target="_blank">源码解析] 快手八卦 --- 机器学习分布式训练新思路(1)</a></p>
+<h2 id="0x01-优化">0x01 优化</h2>
+<p>现有其他框架都是针对某一个具体算法或者场景进行优化，下图是DP-SG的通信模式以及Horovod、BytePS和PyTorch-DDP如何针对这种通信模式进行优化。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104211537227-279683613.png" alt="" loading="lazy"></p>
+<p>八卦希望设计一种针对所有通信算法的优化方式。BAGUA的核心部分是它的<em>执行优化器（execution optimizer）</em>。给定一个神经网络作为输入，一个训练算法（例如QSGD）将在每个层的计算过程中利用一系列的通信原语来实现。BAGUA的执行优化器的目标是自动安排和优化这些计算和通信。在BAGUA中探索了以下技术。</p>
+<h3 id="11-重叠通信和计算">1.1 重叠通信和计算</h3>
+<p>该项优化的目的是将通讯时间隐藏在计算时间中。</p>
+<p>把通信和计算重叠起来是加速分布式DP-SG的一个核心操作。不仅限于DP-SG算法，BAGUA能够以一种灵活和自动的方式将通信原语与其他算法的计算重叠起来，因此能够将部分通信时间隐藏在计算时间中，这样可以降低通信开销。</p>
+<p>具体来讲，在反向梯度的计算过程中，部分已经完成的梯度可以在剩余梯度的计算过程中同时进行通信——通过这种流水的处理方式，部分通信时间可以被有效地“隐藏”在反向梯度的计算过程中，从而减小数据并行带来的通信开销。BAGUA自动分析计算图，包括in-place张量操作和十个通信原语。尽管人们可以通过静态分析来构建这个图，但BAGUA利用动态分析方法，在第一次迭代中就可以收集到张量操作和通信基元的调用依赖。</p>
+<p>与现有系统相比，BAGUA考虑了更复杂的调度。在vanilla DP-SG中，优化只能将Allreduce通信隐藏在反向传播的计算中；相比之下，BAGUA可以调度额外的元素，如使用低精度的压缩/解压缩和优化算法对于指定的模型进行更新。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104211559070-771537109.png" alt="" loading="lazy"></p>
+<h3 id="12-分桶通信和扁平化">1.2 分桶通信和扁平化</h3>
+<p>频繁的传输碎片化数据，会降低通信的效率，不利于充分利用网络带宽。为了有效地将通信和计算重叠起来，将各层型参数划分为若干个桶进行通信是一个必要的步骤，这样通讯的单位就变成了桶，从而能够更高效地利用通信模型。</p>
+<p>因此，Horovod和PyTorch-DDP都采用了桶的技巧。然而，他们的bucketing方案只是简单地把Allreduce通信硬编码，用启发式的思路来减少成本，并使用神经网络之中层的倒序来确定buckets。相比之下，由于BAGUA支持更多通信方式，而且这些通信方式可以指定优化算法，并且使用BAGUA的通信原语，因此bucketing是根据在分析（profiling）阶段收集的相关性信息来确定。</p>
+<p>一旦我们将计算图分割成桶，BAGUA就在这些桶上进行融合。这使得BAGUA有可能实现一个更有效的流水线。在确定反向传播的第一次运行中的桶的分区后，BAGUA会仔细地将桶内的参数（如模型参数、梯度和优化器状态）对齐到一个连续的内存空间。然后在所有的流水线执行中利用这种参数的扁平化视图。</p>
+<p>此外，由于支持了信息压缩算法，对于压缩和解压的函数，其操作的基本单位也是桶，这样也能使得这些操作的开销降低。例如，低精度压缩/解压缩lambda会直接应用于桶的扁平化视图，而不是单个参数；用于模型更新的基于SG的优化器也在桶的层面上进行（NVIDIA的Apex也使用类似的优化）。请注意，这种扁平化视图可以更有效地利用计算单元所提供的并行性。</p>
+<h3 id="13-分层化通信">1.3 分层化通信</h3>
+<p>由于工业级别的分布式训练往往需要多机多卡，而不同物理连接方式所带来的延时和带宽也有较大差异，因此，通讯的有效抽象也对性能的提升至关重要。</p>
+<p>BAGUA的通信可以分层进行。这在处理异构网络连接时特别有用，例如，服务器内GPU之间的带宽要比服务器之间的带宽高得多。Bagua 将涉及多机的通信抽象成：“机内”和“机间”，在此抽象的基础上优化通信基元的实现，并对于相应的通信抽象做了优化。</p>
+<p>例如，对于信息压缩传输，分层化通讯将会把这一算法解读成“机内”完整精度，“机间”信息压缩，从而为不同的物理链接提供最合适的通信算法。集中式低精度原语（CLPS）可以被优化为首先在每个节点内部的本地工作者上聚合张量，不压缩，然后在每个节点选出的领导worker上进行节点间聚合，压缩。最后让每个领导worker在节点内广播聚合的数据。请注意，这种优化可能会改变通信原语的语义。对于去中心化的原语，节点内的工作者将总是被改变为中心化的Allreduce方式。</p>
+<p>接下来，我们就看看两种优化手段：融合和分层化。</p>
+<h2 id="0x02-generic-fused-optimizer">0x02 Generic Fused Optimizer</h2>
+<p>八卦提供了通用的融合优化器，通过在多层上融合优化器<code>.step()</code>操作（fusing the optimizer <code>.step()</code> operation on multiple layers）来提高优化器的性能。它可以应用于任意 PyTorch 优化器。代码位于 bagua/torch_api/contrib/fused_optimizer.py。</p>
+<h3 id="21-背景知识">2.1 背景知识</h3>
+<p>我们首先介绍一下背景知识。</p>
+<h4 id="211-tensor">2.1.1 Tensor</h4>
+<p>我们一般印象中的 Tensor 如下：</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104211610543-785163980.png" alt="" loading="lazy"></p>
+<p>实际上，张量分为元信息区（Tensor） 和 存储区（Storage）。信息区保存张量的形状（size），步长（stride），数据类型（type）等信息，真正数据则在 Storage 之中保存成连续数组。</p>
+<pre><code class="language-python">+------------------+        +-----------------+
+| Tensor           |        | Storage         |
+|                  |        |                 |
+|                  |        |                 |
+|    stride        |        |      data       |
+|                  |        |                 |
+|    size          |        |      size       |
+|                  |        |                 |
+|    type          |        |                 |
+|                  |        |                 |
+|    shape         |        |                 |
+|                  |        |                 |
+|    dimention     |        |                 |
+|                  |        |                 |
+|    storage  +-----------&gt; |                 |
+|                  |        |                 |
+|                  |        |                 |
++------------------+        +-----------------+
+</code></pre>
+<h4 id="212-storage">2.1.2 Storage</h4>
+<p>我们也可以这么理解，Storage 是连续的内存块，Tensor 是一个视图，该视图把Storage单条内存区域映射到了n维的空间视图。</p>
+<p>所以涉及到几个概念。</p>
+<ul>
+<li>Size 是张量的维度。</li>
+<li>Storage offset 是数据在storage中的索引。是张量第一个元素与storage第一个元素的偏移量。</li>
+<li>Stride 是storage中对应于张量相邻维度间第一个索引的跨度，是在指定维度中从一个元素跳到下一个元素所必需的步长。</li>
+</ul>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104211622487-62672609.png" alt="" loading="lazy"></p>
+<p>比如：</p>
+<pre><code class="language-python">import torch
+
+a = torch.arange(6)
+print("Tensor a : ", a)
+print("a storage : " , a.storage())
+print("a size : " , a.size())
+print("a stride : " , a.stride())
+print("a.data.storage().data_ptr() : " , a.data.storage().data_ptr())
+
+b = a.view(2,3) # 换一种view方式
+print("Tensor b : ", b)
+print("b storage : " , b.storage())
+print("b size : " , b.size())
+print("b stride : " , b.stride())
+print("b.data.storage().data_ptr() : " , b.data.storage().data_ptr())
+
+c = a.view(3,2) # 再换一种view方式
+print("Tensor c : ", c)
+print("c storage : " , c.storage())
+print("c size : " , c.size())
+print("c stride : " , c.stride())
+print("c.data.storage().data_ptr() : " , c.data.storage().data_ptr())
+</code></pre>
+<p>输出，可以看出来，同样的存储，但是视图不同，就是不同的张量：</p>
+<pre><code class="language-python"># 张量 a
+Tensor a :  tensor([0, 1, 2, 3, 4, 5])
+a storage :   
+ 0
+ 1
+ 2
+ 3
+ 4
+ 5
+[torch.LongStorage of size 6]
+a size :  torch.Size([6])
+a stride :  (1,)
+a.data.storage().data_ptr() :  140266160612352
+  
+# 张量 b  
+Tensor b :  tensor([[0, 1, 2],
+        [3, 4, 5]])
+b storage :   
+ 0
+ 1
+ 2
+ 3
+ 4
+ 5
+[torch.LongStorage of size 6]
+b size :  torch.Size([2, 3])
+b stride :  (3, 1)
+b.data.storage().data_ptr() :  140266160612352
+  
+# 张量 c  
+Tensor c :  tensor([[0, 1],
+        [2, 3],
+        [4, 5]])
+c storage :   
+ 0
+ 1
+ 2
+ 3
+ 4
+ 5
+[torch.LongStorage of size 6]
+c size :  torch.Size([3, 2])
+c stride :  (2, 1)
+c.data.storage().data_ptr() :  140266160612352
+</code></pre>
+<p>我们单独看看 offset</p>
+<pre><code class="language-python">d = a[3:]
+print(d.storage())
+print(a.storage_offset())
+print(b.storage_offset())
+print(c.storage_offset())
+print(d.storage_offset())
+</code></pre>
+<p>输出如下，可以看出来，d 的 storage 不变，但是d 的 torage_offset 是 3 ：</p>
+<pre><code class="language-python"># d的storae
+ 0
+ 1
+ 2
+ 3
+ 4
+ 5
+[torch.LongStorage of size 6]
+0 # a.storage_offset()
+0 # b.storage_offset()
+0 # c.storage_offset()
+3 # d.storage_offset() ---- 变化了
+</code></pre>
+<p>另外，一个对象的id值可以认为是其在内存中的地址，比如 id(b.storage()) 。</p>
+<h4 id="213-内部实现">2.1.3 内部实现</h4>
+<p>我们接下来看看内部实现。</p>
+<p><img src="https://img2020.cnblogs.com/blog/1850883/202201/1850883-20220104211652446-2008473881.png" alt="" loading="lazy"></p>
+<p>TensorImpl 是 Tensor 内部实现。</p>
+<pre><code class="language-cpp">struct C10_API TensorImpl : public c10::intrusive_ptr_target {
+  c10::impl::SizesAndStrides sizes_and_strides_;
+
+  int64_t storage_offset_ = 0;
+  caffe2::TypeMeta data_type_;  
+  Storage storage_;
+  
+</code></pre>
+<p>StorageImpl 则是 storage 的内部实现，可以看出来，storage是在DataPtr之上封装的接口。</p>
+<pre><code class="language-cpp">struct C10_API StorageImpl final : public c10::intrusive_ptr_target {
+
+  DataPtr data_ptr_;
+  size_t size_bytes_;
+  bool resizable_;
+  // Identifies that Storage was received from another process and doesn't have
+  // local to process cuda memory allocation
+  bool received_cuda_;
+  Allocator* allocator_;  
+</code></pre>
+<h3 id="22-定义">2.2 定义</h3>
+<p>FusedOptimizer 通过将参数张量展平到一个或多个连续桶之中，就可以将多个模块参数更新内核融合为一个或少数几个。这里最主要的是对于 16位，32位参数来分别调用 flatten_module_params 做 flatten。</p>
+<pre><code class="language-python">class FusedOptimizer(torch.optim.Optimizer):
+    """Convert any optimizer into a fused optimizer.
+
+    This fused optimizer fuses multiple module parameter update kernel launches
+    into one or a few, by flattening parameter tensors into one or more
+    contiguous buckets.
+
+    It can be used in conjunction with :meth:`~bagua.torch_api.distributed.BaguaModule.with_bagua` method. In this case,
+    Bagua will do the fusions automatically, otherwise, you need to explicitly
+    set :attr:`do_flatten=True`.
+
+    Args:
+        optimizer (torch.optim.Optimizer): Any PyTorch optimizer.
+        do_flatten (bool): Whether to flatten the parameters. Default: ``False``.
+
+    Returns:
+        Fused optimizer.
+
+
+    Example::
+        To use in conjunction with :meth:`~bagua.torch_api.distributed.BaguaModule.with_bagua` method:
+
+        &gt;&gt;&gt; optimizer = torch.optim.Adadelta(model.parameters(), ....)
+        &gt;&gt;&gt; optimizer = bagua.torch_api.contrib.FusedOptimizer(optimizer)
+        &gt;&gt;&gt; model = model.with_bagua([optimizer], GradientAllReduceAlgorithm())
+
+        To use alone or with `torch.nn.parallel.DistributedDataParallel &lt;https://pytorch.org/docs/stable/generated/torch.nn.parallel.DistributedDataParallel.html?highlight=distributeddataparallel#torch.nn.parallel.DistributedDataParallel&gt;`_,
+        set :attr:`do_flatten=True`:
+
+        &gt;&gt;&gt; optimizer = torch.optim.Adadelta(model.parameters(), ....)
+        &gt;&gt;&gt; optimizer = bagua.torch_api.contrib.FusedOptimizer(optimizer, do_flatten=True)
+    """
+
+    def __init__(self, optimizer: torch.optim.Optimizer, do_flatten: bool = False):
+        self.optimizer = copy.copy(optimizer)
+        super(FusedOptimizer, self).__init__(optimizer.param_groups, optimizer.defaults)
+
+        if do_flatten:
+            f32_params = [ # 提取优化器参数之中32位参数
+                param
+                for group in self.optimizer.param_groups
+                for param in group["params"]
+                if param.type() == "torch.cuda.FloatTensor"
+            ]
+            f16_params = [ # 提取优化器参数之中16位参数
+                param
+                for group in self.optimizer.param_groups
+                for param in group["params"]
+                if param.type() == "torch.cuda.HalfTensor"
+            ]
+
+            # 然后分别打平
+            flatten_module_params(f32_params, align_bytes=1)
+            flatten_module_params(f16_params, align_bytes=1)
+</code></pre>
+<h3 id="23-打平">2.3 打平</h3>
+<p>把所有的 16 位 "params" 拷贝到一起，所有32位 "params" 拷贝到一起，逻辑是：</p>
+<ul>
+<li>初始化打平的权重张量 flatten_weights_tensor，并且指定了之前的设备。</li>
+<li>初始化打平的梯度张量 flatten_grads_tensor，并且指定了之前的设备。</li>
+<li>获取打平张量的storage。</li>
+<li>遍历参数列表：
+<ul>
+<li>把权重拷贝到flatten张量，p.numel() 是元素个数，reshape(-1) 就是展平了，设置了存储信息。</li>
+<li>把梯度拷贝到flatten张量，p.numel() 是元素个数，reshape(-1) 就是展平了，设置了存储信息。</li>
+<li>设置底层的storage，size 和 strides，其实就是设置元信息。</li>
+</ul>
+</li>
+<li>返回聚合打平之后的参数。</li>
+</ul>
+<pre><code class="language-python">def flatten_module_params(params_list, align_bytes: int):
+    if len(params_list) == 0:
+        return
+    if not isinstance(params_list[0], list):
+        params_list = [params_list]
+
+    total_size = 0
+    for params in params_list: # 计算参数总大小
+        total_size += _get_params_flattened_aligned_size(params, align_bytes)
+
+    # 初始化打平的权重张量，并且指定了之前的设备    
+    flatten_weights_tensor = torch.zeros(total_size, dtype=params_list[0][0].dtype).to(
+        params_list[0][0].device
+    )
+    # 初始化打平的梯度张量，并且指定了之前的设备 
+    flatten_grads_tensor = torch.zeros(total_size, dtype=params_list[0][0].dtype).to(
+        params_list[0][0].device
+    )
+
+    # 获取打平张量的storage
+    flatten_weights_storage = flatten_weights_tensor.storage()
+    flatten_grads_storage = flatten_grads_tensor.storage()
+
+    # 设置底层的storage，size 和 strides，其实就是设置元信息
+    def set_storage(param, weight_storage, grad_storage, storage_offset):
+        with torch.no_grad():
+            z = torch.zeros_like(param.data)
+            z.set_(weight_storage, storage_offset, param.shape)
+            param.data = z
+
+            t = torch.zeros_like(param.data)
+            t.set_(grad_storage, storage_offset, param.shape)
+            param.grad = t
+
+    offset = 0
+    for params in params_list: # 遍历参数列表
+        for p in params:
+            # copy data
+            # 把权重拷贝到flatten，p.numel() 是元素个数，reshape(-1) 就是展平了，设置了存储信息
+            flatten_weights_tensor[offset : offset + p.numel()] = p.data.reshape(-1)
+
+            # 把梯度拷贝到flatten
+            if p.grad is not None:
+                flatten_grads_tensor[offset : offset + p.numel()] = p.grad.data.reshape(
+                    -1
+                )
+
+            # flatten
+            # 设置底层的storage，size 和 strides，其实就是设置元信息
+            set_storage(p, flatten_weights_storage, flatten_grads_storage, offset)
+            offset += p.allocated_size
+
+    # check
+    for params in params_list:
+        weight_tensors = [p.data for p in params]
+        grad_tensors = [p.grad.data for p in params]
+
+        assert check_contiguous(weight_tensors)
+        assert check_contiguous(grad_tensors)
+
+    # 返回聚合打平之后的参数    
+    return new_param(flatten_weights_tensor, flatten_grads_tensor)
+</code></pre>
+<p>具体如下，这里假设都是32位的张量，就都被聚合到 f32_params 之中。flatten_module_params 就是处理之后的，属于被打平的张量。其中 group_1 的两个权重 param_wg11, param_wg12 被排列在一起。</p>
+<pre><code class="language-python"> +--------------------------+   +--------------------------+   +---------------------------+
+ | group_1["params"]        |   | group_2["params"]        |   | group_3["params"]         |
+ |                          |   |                          |   |                           |
+ |  param_wg11 , param_gg11 |   |  param_wg21 , param_gg21 |   |  param_wg31 , param_gg31  |
+ |  param_wg12 , param_gg12 |   |  param_wg22 , param_gg22 |   |  param_wg32 , param_gg32  |
+ |                          |   |                          |   |                           |
+ +-------+------------------+   +----------+---------------+   +----------------+----------+
+         |                                 |                                    |
+         |                                 |                                    |
+         +---------------+-----------------+-------------------+----------------+
+                         |                                     |
+                         | f32_params                          | f16_params
+                         |                                     |
+                         v                                     v
++------------------------+---------------+     +---------------+---------------------------+
+| flatten_module_params                  |     | flatten_module_params                     |
+|                                        |     |                                           |
+| +------------------------------------+ |     |  +-------------------------------------+  |
+| |flatten_weights_tensor              | |     |  |flatten_weights_tensor               |  |
+| |                                    | |     |  |                                     |  |
+| | param_wg11, param_wg12, param_wg21 | |     |  |               ......                |  |
+| |                                    | |     |  |                                     |  |
+| | param_wg22, param_wg31, param_wg32 | |     |  |                                     |  |
+| +------------------------------------+ |     |  +-------------------------------------+  |
+| +------------------------------------+ |     |  +-------------------------------------+  |
+| |flatten_grads_tensor                | |     |  |  flatten_grads_tensor               |  |
+| |                                    | |     |  |                                     |  |
+| | param_gg11, param_gg12, param_gg21 | |     |  |                ......               |  |
+| |                                    | |     |  |                                     |  |
+| | param_gg22, param_gg31, param_gg32 | |     |  |                                     |  |
+| +------------------------------------+ |     |  +-------------------------------------+  |
++----------------------------------------+     +-------------------------------------------+
+
+</code></pre>
+<h3 id="24-优化">2.4 优化</h3>
+<p>优化代码如下，具体是按照group遍历参数，对于每组参数：</p>
+<ul>
+<li>按照存储把参数分组。</li>
+<li>重新排序。</li>
+<li>再把融合的赋值回去。</li>
+</ul>
+<pre><code class="language-python">def step(self, closure=None):
+    r"""Performs a single optimization step (parameter update).
+
+    Args:
+        closure (Callable): A closure that reevaluates the model and
+            returns the loss. Optional for most optimizers.
+
+    .. note::
+        Unless otherwise specified, this function should not modify the
+        ``.grad`` field of the parameters.
+    """
+    for group in self.optimizer.param_groups: # 按照group遍历参数
+        params = group["params"]
+        grouped_params = group_params_by_storage(params) # 按照存储把参数分组
+
+        fused_params = []
+
+        for _, group_p in grouped_params.items():
+            fused_params.extend(reorder_params(group_p)) # 重新排序
+
+        group["params"] = fused_params # 再把融合的赋值回去
+
+    return self.optimizer.step(closure)
+</code></pre>
+<h4 id="241-按照存储分组">2.4.1 按照存储分组</h4>
+<p>其实，就是 32 位，16位，weight，grad 一共四种组合。</p>
+<p>比如针对 group_1 拿到了 32 位的权重 param_wg11, param_wg12，因为他们的 p.data.storage().data_ptr() 一致，所以把这个数值作为key，把这些权重放在同样 key 对应的位置。</p>
+<pre><code class="language-python">def group_params_by_storage(params):
+    grouped_params = {}
+    for p in params:
+        weight_storage = p.data.storage().data_ptr() # 拿到key
+        param_list = grouped_params.get(weight_storage, [])
+        param_list.append(p) 
+        grouped_params[weight_storage] = param_list # 放进value
+
+    return grouped_params
+</code></pre>
+<h4 id="242-重新排序">2.4.2 重新排序</h4>
+<p>对于同样key 的参数，按照 storage offset 进行排序。</p>
+<pre><code class="language-python">def reorder_params(params):
+    """Input params share same storage, reorder them by their storage offset"""
+
+    sorted_params = sorted(params, key=lambda x: x.storage_offset())
+
+    grouped = []
+    tmp_params = []
+
+    for p in sorted_params:
+        if len(tmp_params) &gt; 0 and not is_contiguous_param(p, tmp_params[-1]):
+            grouped.append(collocate_params(tmp_params))
+            tmp_params = []
+
+        tmp_params.append(p)
+
+    if len(tmp_params) &gt; 0:
+        grouped.append(collocate_params(tmp_params))  # FIXME: potential OOM
+
+    return grouped
+</code></pre>
+<p>整个优化大致如下：</p>
+<p>最开始时候是  group['params'] = list(param_wg11, param_wg12) ，<u>两个item 的list</u>，两次CUDA操作。</p>
+<p>结束时候是  group['params'] = list(param_wg11 + param_wg12) ，<u>一个 item 的list</u>，这里就融合了，缩减为一次CUDA操作。</p>
+<pre><code class="language-python">+----------------------------------------+     +-------------------------------------------+
+| flatten_module_params                  |     | flatten_module_params                     |
+|                                        |     |                                           |
+| +------------------------------------+ |     |  +-------------------------------------+  |
+| |flatten_weights_tensor              | |     |  |flatten_weights_tensor               |  |
+| |                                    | |     |  |                                     |  |
+| | param_wg11, param_wg12, param_wg21 | |     |  |               ......                |  |
+| |                                    | |     |  |                                     |  |
+| | param_wg22, param_wg31, param_wg32 | |     |  |                                     |  |
+| +------------------------------------+ |     |  +-------------------------------------+  |
+| +------------------------------------+ |     |  +-------------------------------------+  |
+| |flatten_grads_tensor                | |     |  |  flatten_grads_tensor               |  |
+| |                                    | |     |  |                                     |  |
+| | param_gg11, param_gg12, param_gg21 | |     |  |                ......               |  |
+| |                                    | |     |  |                                     |  |
+| | param_gg22, param_gg31, param_gg32 | |     |  |                                     |  |
+| +------------------------------------+ |     |  +-------------------------------------+  |
++----------------------------------------+     +-------------------------------------------+
+
++-------------------------------------------+----------------------------------------------+
+                                            |
+                                            |
+                                            v
+           +------------------------------------------------------------------------+
+           | step()                         |                                       |
+           |                                |                                       |
+           |                                |                                       |
+           |                                v            2 items list               |
+           |                                                                        |
+           |                   group['params'] = list(param_wg11, param_wg12)       |
+           |                                +                                       |
+           |                                |                                       |
+           |                                |                                       |
+           |                                v                                       |
+           |                     group_params_by_storage / reorder_params           |
+           |                                +                                       |
+           |                                |                                       |
+           |                                |                                       |
+           |                                v                                       |
+           |          grouped_params] = {140266160612352 : param_wg11, param_wg12}  |
+           |                                +                                       |
+           |                                |                                       |
+           |                                |            1 item list                |
+           |                                v                                       |
+           |                group['params'] = list(param_wg11 + param_wg12)         |
+           |                                                                        |
+           |                                +                                       |
+           |                                |                                       |
+           |                                v                                       |
+           |                    self.optimizer.step(closure)                        |
+           |                                                                        |
+           |                                                                        |
+           +------------------------------------------------------------------------+
+</code></pre>
+<h2 id="0x03-分层化-----进程组">0x03 分层化 --- 进程组</h2>
+<h3 id="31-设计思路">3.1 设计思路</h3>
+<p>Bagua的设计思路如下：</p>
+<blockquote>
+<p>分层化的通信实现：由于工业级别的分布式训练往往需要多机多卡，而不同物理连接方式所带来的延时和带宽也有较大差异，因此，通讯的有效抽象也对性能的提升至关重要。Bagua 将涉及多机的通信抽象成：“机内”和“机间”，并对于相应的通信抽象做了优化。例如，对于信息压缩传输，分层化通讯将会把这一算法解读成“机内”完整精度，“机间”信息压缩，从而为不同的物理链接提供最合适的通信算法。</p>
+<p>我们想要强调的是，这些系统实现层面的优化是对于各种算法组合广泛适用，而非局限在某一特定的算法设置上。因此，所有的系统优化都可以被灵活的复用到各种算法实现中去，这在保证“端到端”的性能提升的同时，也为开发新的分布式算法提供了良好的平台。</p>
+</blockquote>
+<p>我们接下来就看看如何通过进程组实现分层化通信。分析思路就是：</p>
+<ul>
+<li>分层通信是不是有多个对应的进程组？</li>
+<li>如何得到节点内通信进程组的ranks？</li>
+<li>如何得到节点间通信进程组使用的ranks？</li>
+<li>每个进程组都有自己独立的通信方法吗？</li>
+<li>通信时候如何进行分层通信？</li>
+</ul>
+<h3 id="32-生成进程组">3.2 生成进程组</h3>
+<p>我们可以从源码之中的测试文件之中找到如何生成一个新进程组。</p>
+<pre><code class="language-python">all_ranks = list(range(nprocs))
+odd_ranks = list(filter(lambda r: r % 2 == 1, all_ranks))
+g = bagua.communication.new_group(ranks=odd_ranks)
+</code></pre>
+<p>new_group 此功能要求默认组中的所有进程（即作为分布式作业一部分的所有进程）都执行这个函数，即使它们不是组的成员。其参数是：</p>
+<ul>
+<li>ranks ：组成员的ranks列表。</li>
+<li>stream ： 执行NCCL操作的CUDA流。</li>
+</ul>
+<pre><code class="language-python">def new_group(
+    ranks: Optional[List[int]] = None, stream: Optional[torch.cuda.Stream] = None
+):
+    """
+    Creates a new process group.
+
+    This function requires that all processes in the default group (i.e. all
+    processes that are part of the distributed job) enter this function, even
+    if they are not going to be members of the group. Additionally, groups
+    should be created in the same order in all processes.
+
+    Each process group will create three communicators on request, a global communicator,
+    a inter-node communicator and a intra-node communicator. Users can access them through
+    ``group.get_global_communicator()``, ``group.get_inter_node_communicator()``
+    and ``group.get_intra_node_communicator()`` respectively.
+
+    Args:
+        ranks: List of ranks of group members. If ``None``, will be
+            set to all ranks. Default is ``None``.
+        stream: A CUDA stream used to execute NCCL operations. If ``None``,
+            CUDA stream of the default group will be used. See
+            `CUDA semantics &lt;https://pytorch.org/docs/stable/notes/cuda.html?highlight=stream&gt;`_
+            for details.
+
+    Returns:
+        A handle of process group that can be given to collective calls.
+
+    .. note::
+        The global communicator is used for global communications involving all ranks in the process group.
+        The inter-node communicator and the intra-node communicator is used for hierarchical communications
+        in this process group.
+
+    .. note::
+        For a specific communicator ``comm``, ``comm.rank()`` returns the rank of current process and
+        ``comm.nranks()`` returns the size of the communicator.
+    """
+    global _group_count
+    global _pg_group_ranks
+    global _pg_map
+
+    _group_count += 1
+
+    if ranks is None:
+        ranks = list(range(get_world_size()))
+    else:
+        ranks = sorted(ranks) # 排序
+
+    if stream is None:
+        _check_default_pg()
+        stream = _get_default_group().stream
+
+    group_name = str(_group_count)
+    pg = BaguaProcessGroup(ranks, stream, str(_group_count)) # 生成进程组
+    
+    # Create the global rank to group rank mapping
+    _pg_group_ranks[pg] = {
+        global_rank: group_rank for group_rank, global_rank in enumerate(ranks)
+    }
+    _pg_map[group_name] = pg
+
+    return pg
+</code></pre>
+<h3 id="33-ranks">3.3 Ranks</h3>
+<p>我们接着看看两个全局变量如何计算，一个是层内的ranks，一个是层间的ranks。</p>
+<pre><code class="language-python">intra_ranks = list(
+    filter(
+        lambda rank: rank // get_local_size() == get_rank() // get_local_size(),
+        ranks,
+    )
+)
+inter_ranks = list(
+    filter(
+        lambda rank: rank % get_local_size() == ranks[0] % get_local_size(),
+        ranks,
+    )
+)
+</code></pre>
+<p>Python 的操作符如下：</p>
+<table>
+<thead>
+<tr>
+<th>//</th>
+<th>取整除 - 返回商的整数部分（<strong>向下取整</strong>）</th>
+<th>9//2 是 4 , -9//2 是 -5</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>%</td>
+<td>取模 - 返回除法的余数</td>
+<td>b % a 输出结果 0</td>
+</tr>
+</tbody>
+</table>
+<p>实验一下</p>
+<pre><code class="language-python">def get_rank() -&gt; int:
+    return 5
+def get_local_size():
+    return 3
+    
+nprocs = 10 # 10个进程
+ranks = list(range(nprocs)) # rank是0~9
+print(intra_ranks) # rank 5 所在的intra_ranks。
+print(inter_ranks) # 总的inter_ranks，能看出来是在 local size 的边缘。
+
+输出
+[3, 4, 5] # intra_ranks
+[0, 3, 6, 9] # inter_ranks，在 local size 3 的边缘
+</code></pre>
+<p>具体用到的几个函数如下：</p>
+<pre><code class="language-python">def get_rank() -&gt; int:
+    """
+    Get the rank of current process group.
+
+    Rank is a unique identifier assigned to each process within a distributed
+    process group. They are always consecutive integers ranging from 0 to
+    ``world_size``.
+
+    Returns:
+        The rank of the process group.
+    """
+    return int(os.environ.get("RANK", 0))
+
+
+def get_local_rank() -&gt; int:
+    """
+    Get the rank of current node.
+
+    Local rank is a unique identifier assigned to each process within a node.
+    They are always consecutive integers ranging from 0 to ``local_size``.
+
+    Returns:
+        The local rank of the node.
+    """
+    return int(os.environ.get("LOCAL_RANK", 0))
+  
+  
+def get_local_size() -&gt; int:
+    """
+    Get the number of processes in the node.
+
+    Returns:
+        The local size of the node.
+    """
+    return int(os.environ.get("LOCAL_WORLD_SIZE", 1))  
+</code></pre>
+<p>现在我们知道了，不同进程组内部的ranks如何得到。</p>
+<h3 id="34-baguaprocessgroup-定义">3.4 BaguaProcessGroup 定义</h3>
+<p>我们接下来看看 BaguaProcessGroup 如何定义，从定义上看，每个进程组都建立了三个 communicators，分别是：</p>
+<ul>
+<li>a global communicator，使用 <code>group.get_global_communicator()</code> 可以得到。</li>
+<li>a inter-node communicator，使用 <code>group.get_inter_node_communicator()</code> 可以得到。</li>
+<li>a intra-node communicator，使用 <code>group.get_intra_node_communicator()</code> 可以得到。</li>
+</ul>
+<p>全局通讯器用于进程组中所有ranks的全局通讯。节点间（inter-node）通讯器和节点内（intra-node）通讯器用于此过程组中的分层（hierarchical）通讯。</p>
+<p>启用分层通信（hierarchical communication）。这意味着同一台机器上的GPU将首先相互通信。之后，机器进行节点间通信。这可以在节点间通信成本较高时提高性能。</p>
+<pre><code class="language-python">class BaguaProcessGroup:
+    def __init__(self, ranks, stream, group_name):
+        self.ranks = ranks
+        self.stream = stream
+        self.group_name = group_name
+
+        self.intra_ranks = list(
+            filter(
+                lambda rank: rank // get_local_size() == get_rank() // get_local_size(),
+                ranks,
+            )
+        )
+        self.inter_ranks = list(
+            filter(
+                lambda rank: rank % get_local_size() == ranks[0] % get_local_size(),
+                ranks,
+            )
+        )
+
+    def get_global_communicator(self):
+        return get_communicator(self.group_name, "global")
+
+    def get_inter_node_communicator(self):
+        return get_communicator(self.group_name, "inter")
+
+    def get_intra_node_communicator(self):
+        return get_communicator(self.group_name, "intra")
+</code></pre>
+<h3 id="35-生成-communicator">3.5 生成 communicator</h3>
+<p>具体就是生成了 BaguaSingleCommunicatorPy。这里使用了 lru_cache 来保证只生成一次。BaguaSingleCommunicatorPy 定义在 rust/bagua-core/bagua-core-py/src/lib.rs，在 rust/bagua-core/bagua-core-internal/src/communicators/mod.rs 之中也有 BaguaHierarchicalCommunicator 和 HierarchicalCommunicator 这样的实现 ，这就不是我们重点了，有兴趣的读者可以深入研究。</p>
+<pre><code class="language-python">@lru_cache(maxsize=None)
+def get_communicator(group_name: str, comm_name: str):
+    global _pg_map
+
+    pg = _pg_map[group_name]
+    if comm_name == "global":
+        ranks = pg.ranks
+    elif comm_name == "inter":
+        ranks = pg.inter_ranks
+    elif comm_name == "intra":
+        ranks = pg.intra_ranks
+    else:
+        raise ValueError("comm_name should be one of ['global', 'inter', 'intra']")
+
+    comm_key = "{}_{}_{}".format(group_name, comm_name, ",".join(map(str, ranks)))
+
+    nccl_unique_id = broadcast_nccl_unique_id(comm_key, root=ranks[0])
+
+    if get_rank() not in ranks:
+        return CommMember.NON_COMM_MEMBER
+
+    rank = ranks.index(get_rank())
+    nranks = len(ranks)
+
+    comm = B.BaguaSingleCommunicatorPy(
+        rank=rank,
+        nranks=nranks,
+        device_id=get_local_rank(),
+        stream_ptr=pg.stream.cuda_stream,
+        nccl_unique_id_str=nccl_unique_id,
+    )
+
+    comm.cuda_stream = pg.stream
+    return comm
+</code></pre>
+<p>具体如下：</p>
+<pre><code class="language-python">+-----------------------------------+
+| BaguaProcessGroup                 |
+|                                   |       +---------------------------+
+|                                   |       | BaguaSingleCommunicatorPy |
+|                                   |       |                           |
+|    get_global_communicator  +-----------&gt; |      ranks                |
+|                                   |       |                           |
+|                                   |       +---------------------------+
+|                                   |
+|                                   |       +---------------------------+
+|                                   |       | BaguaSingleCommunicatorPy |
+|    get_inter_node_communicator +--------&gt; |                           |
+|                                   |       |      inter_ranks          |
+|                                   |       |                           |
+|                                   |       +---------------------------+
+|                                   |
+|                                   |       +---------------------------+
+|    get_intra_node_communicator +--------&gt; | BaguaSingleCommunicatorPy |
+|                                   |       |                           |
+|                                   |       |      intra_ranks          |
+|    ranks                          |       |                           |
+|                                   |       +---------------------------+
+|    inter_ranks                    |
+|                                   |
+|    intra_ranks                    |
+|                                   |
+|                                   |
++-----------------------------------+
+</code></pre>
+<h3 id="36-使用">3.6 使用</h3>
+<p>具体代码在：rust/bagua-core/bagua-core-internal/src/communicators/mod.rs</p>
+<p>可以看到，如果没有设置hierarchical，就正常通信，如果设置hierarchical，就用intra 和 inter 混合着来，先试验 intra，再节点间通信。</p>
+<pre><code class="language-rust">impl BaguaCommunicator {
+    pub fn new(
+        communicator_internode: Option&lt;&amp;BaguaSingleCommunicator&gt;,
+        communicator_intranode: Option&lt;&amp;BaguaSingleCommunicator&gt;,
+        hierarchical: bool,
+    ) -&gt; Result&lt;Self, BaguaCoreError&gt; {
+        match hierarchical {
+            false =&gt; Ok(BaguaCommunicator::SingleCommunicator( // 不是 hierarchical，就正常通信
+                communicator_internode
+                    .expect("inter node communicator must be given in non-hierarchical mode")
+                    .clone(),
+            )),
+            true =&gt; { // 是 hierarchical，就用intra 和 inter 混合着来，先试验 intra
+                let intranode_rank = communicator_intranode.as_ref().unwrap().rank();
+                if intranode_rank == 0 {
+                    let intra = communicator_intranode.expect("intra node communicator must be given in worker GPU in hierarchical mode").clone();
+                    let inter = communicator_internode.unwrap().clone();
+                    {
+                        if intra.inner.stream_ptr != inter.inner.stream_ptr {
+                            return Err(BaguaCoreError::CommunicatorError("intra node communicator should use the same stream as the inter node communicator".into()));
+                        }
+                    }
+                    Ok(BaguaCommunicator::HierarchicalCommunicator(
+                        BaguaHierarchicalCommunicator::Leader(
+                            BaguaHierarchicalCommunicatorLeader::new(inter, intra),
+                        ),
+                    ))
+                } else {
+                    Ok(BaguaCommunicator::HierarchicalCommunicator(BaguaHierarchicalCommunicator::Worker(BaguaHierarchicalCommunicatorWorker {
+                        intranode: communicator_intranode.expect("intra node communicator must be given in worker GPU in hierarchical mode").clone()
+                    })))
+                }
+            }
+        }
+    }
+
+    pub fn execute_communication(
+        &amp;self,
+        tensor: &amp;mut BaguaCommunicationTensor,
+        intranode_average: bool,
+        hierarchical_pre: bool,
+        hierarchical_post: bool,
+        communication_hook: &amp;mut dyn FnMut(
+            &amp;BaguaCommunicatorInner,
+            &amp;mut BaguaCommunicationTensor,
+        ) -&gt; (),
+    ) {
+        match &amp;self {
+            BaguaCommunicator::SingleCommunicator(communicator) =&gt; {
+                let communicator = communicator.inner.clone();
+                communication_hook(&amp;communicator, tensor);
+            }
+            BaguaCommunicator::HierarchicalCommunicator(communicator) =&gt; match communicator {
+                BaguaHierarchicalCommunicator::Leader(communicator) =&gt; {
+                    let internode_communicator = communicator.internode.inner.clone();
+                    if hierarchical_pre { // 先节点内部
+                        communicator.hierarchical_pre(tensor, intranode_average);
+                    }
+                    communication_hook(&amp;internode_communicator, tensor); // 再节点间
+                    if hierarchical_post {
+                        communicator.hierarchical_post(tensor);
+                    }
+                }
+                BaguaHierarchicalCommunicator::Worker(communicator) =&gt; {
+                    if hierarchical_pre {
+                        communicator.hierarchical_worker_pre(tensor, intranode_average);
+                    }
+                    if hierarchical_post {
+                        communicator.hierarchical_worker_post(tensor);
+                    }
+                }
+            },
+        }
+    }
+}
+</code></pre>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="http://blog.ezyang.com/2019/05/pytorch-internals/" target="_blank" rel="noopener nofollow">PyTorch internals</a></p>
+<p><a href="https://www.infoq.cn/article/BQwk3Vdvm3Tlcz7BLCrq" target="_blank" rel="noopener nofollow">快手八卦！突破 TensorFlow、PyTorch 并行瓶颈的开源分布式训练框架来了！</a></p>
+<p><a href="https://arxiv.org/pdf/2107.01499.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2107.01499.pdf</a></p>
+<p>[1] Dean, Jeffrey, Greg S. Corrado, Rajat Monga, Kai Chen, Matthieu Devin, Quoc V. Le, Mark Z. Mao et al. “Large scale distributed deep networks.” (2012).</p>
+<p>[2] Zhengyuan Zhou, Panayotis Mertikopoulos, Nicholas Bambos, Peter Glynn, Yinyu Ye, Li-Jia Li, and Li Fei-Fei. 2018. Distributed asynchronous optimization with unbounded delays: How slow can you go?. In International Conference on Machine Learning. PMLR, 5970–5979.</p>
+<p>[3] DanAlistarh, DemjanGrubic, JerryLi, RyotaTomioka, and MilanVojnovic. 2016. QSGD: Communication-efficient SGD via gradient quantization and encoding. arXiv preprint arXiv:1610.02132 (2016).</p>
+<p>[4] Dan Alistarh, Torsten Hoefler, Mikael Johansson, Sarit Khirirat, Nikola Konstanti- nov, and Cédric Renggli. 2018. The convergence of sparsified gradient methods. In Proceedings of the 32nd International Conference on Neural Information Processing Systems. 5977–5987.</p>
+<p>[5] Anastasia Koloskova, Sebastian Stich, and Martin Jaggi. 2019. Decentralized stochastic optimization and gossip algorithms with compressed communication. In International Conference on Machine Learning. PMLR, 3478–3487.</p>
+<p>[6] Xiangru Lian, Ce Zhang, Huan Zhang, Cho-Jui Hsieh, Wei Zhang, and Ji Liu. 2017. Can decentralized algorithms outperform centralized algorithms? a case study for decentralized parallel stochastic gradient descent. In Proceedings of the 31st International Conference on Neural Information Processing Systems. 5336–5346.</p>
+<p>[7] Christopher De Sa, Matthew Feldman, Christopher Ré, and Kunle Olukotun. 2017. Understanding and optimizing asynchronous low-precision stochastic gradient descent. In Proceedings of the 44th Annual International Symposium on Computer Architecture. 561–574.</p>
+<p>[8] Xiangru Lian, Wei Zhang, Ce Zhang, and Ji Liu. 2018. Asynchronous decentral- ized parallel stochastic gradient descent. In International Conference on Machine Learning. PMLR, 3043–3052.</p>
+<p>[9] Hanlin Tang, Shaoduo Gan, Ce Zhang, Tong Zhang, and Ji Liu. 2018. Com- munication compression for decentralized training. In Proceedings of the 32nd International Conference on Neural Information Processing Systems. 7663–7673.</p>
+<p>[10] Ji Liu, Ce Zhang, et al. 2020. Distributed Learning Systems with First-Order Methods. Foundations and Trends® in Databases 9, 1 (2020), 1–100.</p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1219.8236655786343" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-01-05 21:08">2022-01-05 21:08</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">925</span>)&nbsp;
+评论(<span id="post_comment_count">0</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15764138);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15764138', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15764138.html', title: '[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15764138, cb_entryCreatedDate = '2022-01-05 21:08', cb_postType = 1, cb_postTitle = '[源码解析] 快手八卦 --- 机器学习分布式训练新思路(2)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.trae.com.cn/?utm_source=advertising&amp;utm_medium=cnblogs_ug_cpa&amp;utm_term=hw_trae_cnblogs" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-trae')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202504/35695-20250422130943631-261509646.jpg" onload="countCreativeImpressions('C1-字节-trae')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDoAi3_y0MfsLNsT-ELisxwbdSpx1OKP-z0IuF5q5ju5c5EPn4mLT3f1zzVLFFou3kEjFf-358vo03mrs5ILHTbNdqY-1APR6UVTEZ4SgRONpP41MEOTuWHieAW5kKwNEv4" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

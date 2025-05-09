@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="NVIDIA Megatron 是一个基于 PyTorch 的分布式训练框架，用来训练超大Transformer语言模型，其通过综合应用了数据并行，Tensor并行和Pipeline并行来复现 GPT3，值得我们深入分析其背后机理。" />
+    <meta property="og:description" content="NVIDIA Megatron 是一个基于 PyTorch 的分布式训练框架，用来训练超大Transformer语言模型，其通过综合应用了数据并行，Tensor并行和Pipeline并行来复现 GPT3，值得我们深入分析其背后机理。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行 - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15876714.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15876714.html",
+      "headline": "[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行",
+      "description": "[源码解析] 模型并行分布式训练 Megatron (4) 如何设置各种并行 0x00 摘要 NVIDIA Megatron 是一个基于 PyTorch 的分布式训练框架，用来训练超大Transformer语言模型，其通过综合应用了数据并行，Tensor并行和Pipeline并行来复现 GPT3，值",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-02-10T18:42:00.0000000&#x2B;08:00",
+      "dateModified": "2022-02-10T18:42:00.0000000&#x2B;08:00",
+      "wordCount": "37422",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15876714;
+            window.currentPostDateAdded = '2022-02-10 18:42';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15876714.html" title="发布于 2022-02-10 18:42">
+    <span role="heading" aria-level="2">[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        NVIDIA Megatron 是一个基于 PyTorch 的分布式训练框架，用来训练超大Transformer语言模型，其通过综合应用了数据并行，Tensor并行和Pipeline并行来复现 GPT3，值得我们深入分析其背后机理。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码解析-模型并行分布式训练-megatron-4-----如何设置各种并行">[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码解析-模型并行分布式训练-megatron-4-----如何设置各种并行" rel="noopener nofollow">[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-前文回顾" rel="noopener nofollow">0x01 前文回顾</a></li><li><a href="#0x02-初始化" rel="noopener nofollow">0x02 初始化</a><ul><li><a href="#21-全局变量" rel="noopener nofollow">2.1 全局变量</a></li><li><a href="#22-初始化代码" rel="noopener nofollow">2.2 初始化代码</a></li></ul></li><li><a href="#0x03-切分样例" rel="noopener nofollow">0x03 切分样例</a><ul><li><a href="#31-注释" rel="noopener nofollow">3.1 注释</a></li><li><a href="#32-切分情况" rel="noopener nofollow">3.2 切分情况</a></li><li><a href="#33-切分策略" rel="noopener nofollow">3.3 切分策略</a></li><li><a href="#34-实验" rel="noopener nofollow">3.4 实验</a></li></ul></li><li><a href="#0x04-起始状态" rel="noopener nofollow">0x04 起始状态</a><ul><li><a href="#41-gpu-状况" rel="noopener nofollow">4.1 GPU 状况</a></li><li><a href="#42-符号说明" rel="noopener nofollow">4.2 符号说明</a></li><li><a href="#43-初始分组" rel="noopener nofollow">4.3 初始分组</a></li></ul></li><li><a href="#0x05-tensor-model-parallel" rel="noopener nofollow">0x05 Tensor model-parallel</a><ul><li><a href="#51-分组" rel="noopener nofollow">5.1 分组</a></li><li><a href="#52-使用" rel="noopener nofollow">5.2 使用</a></li></ul></li><li><a href="#0x06-pipe-parallel" rel="noopener nofollow">0x06 Pipe-parallel</a><ul><li><a href="#61-分组" rel="noopener nofollow">6.1 分组</a></li><li><a href="#62-使用" rel="noopener nofollow">6.2 使用</a><ul><li><a href="#621-上下游rank" rel="noopener nofollow">6.2.1 上下游rank</a></li><li><a href="#622-world-size" rel="noopener nofollow">6.2.2 world size</a></li></ul></li></ul></li><li><a href="#0x07-data-parallel" rel="noopener nofollow">0x07 Data-parallel</a><ul><li><a href="#71-分组" rel="noopener nofollow">7.1 分组</a></li><li><a href="#72-如何使用" rel="noopener nofollow">7.2 如何使用</a></li></ul></li><li><a href="#0x08-模型组" rel="noopener nofollow">0x08 模型组</a></li><li><a href="#0x09-如何把模型分到gpu" rel="noopener nofollow">0x09 如何把模型分到GPU</a></li><li><a href="#0xff-参考" rel="noopener nofollow">0xFF 参考</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>NVIDIA Megatron 是一个基于 PyTorch 的分布式训练框架，用来训练超大Transformer语言模型，其通过综合应用了数据并行，Tensor并行和Pipeline并行来复现 GPT3，值得我们深入分析其背后机理。</p>
+<p>本系列大概有 5 篇文章，通过论文和源码和大家一起学习研究。本文将看看 Megatron 如何处理设置并行。</p>
+<p>本系列其他文章为：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15840803.html" target="_blank">源码解析] 模型并行分布式训练Megatron (1) --- 论文 &amp; 基础</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15868988.html" target="_blank">源码解析] 模型并行分布式训练Megatron (2) --- 整体架构</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15871062.html" target="_blank">源码解析] 模型并行分布式训练 Megatron (3) ---模型并行实现</a></p>
+<h2 id="0x01-前文回顾">0x01 前文回顾</h2>
+<p>前文我们对模型并行的原理和代码进行了分析，对于给定的模型，现在还需要解决几个问题：</p>
+<ul>
+<li>如何把模型切分给节点，比如哪个节点负责哪些层。</li>
+<li>数据并行，模型并行，流水线并行这几种并行之中，每个节点分别属于哪个部分？</li>
+<li>如何避免流水线带来的问题。</li>
+</ul>
+<p>我们接下来就仔细分析一下。</p>
+<h2 id="0x02-初始化">0x02 初始化</h2>
+<p>initialize_model_parallel  方法用来设置模型并行，所以我们接下来就具体分析。</p>
+<h3 id="21-全局变量">2.1 全局变量</h3>
+<p>因为前文_initialize_distributed之中调用了torch.distributed.init_process_group 初始化分布式环境，所以我们知道，每个进程都有自己的 gloabl rank 和 local rank，都有自己的全局变量。</p>
+<p>主要变量如下（具体例子可以结合 initialize_model_parallel 之中的注释来看）：</p>
+<ul>
+<li>_TENSOR_MODEL_PARALLEL_GROUP ：当前 rank 所属于的Intra-layer model parallel group，就是tensor 并行进程组。
+<ul>
+<li>假如每一层分为两个tensor，则 _TENSOR_MODEL_PARALLEL_GROUP 例子为：[g0, g1], [g2, g3], [g4, g5], [g6, g7], [g8, g9], [g10, g11], [g12, g13], [g14, g15]。</li>
+</ul>
+</li>
+<li>_PIPELINE_MODEL_PARALLEL_GROUP ：当前 rank 所属于的Intra-layer model parallel group，就是流水线进程组。
+<ul>
+<li>假如流水线深度为4，则例子为 [g0, g4, g8, g12], [g1, g5, g9, g13], [g2, g6, g10, g14], [g3, g7, g11, g15]。</li>
+</ul>
+</li>
+<li>_MODEL_PARALLEL_GROUP ：当前 rank 所属于的模型并行进程组，包括了以上两组。
+<ul>
+<li>针对我们例子，就是完整模型被复制了两份，其 GPU 节点具体是[0, 1, 4, 5, 8, 9, 12, 13]，[2, 3, 6, 7, 10, 11, 14, 15]</li>
+</ul>
+</li>
+<li>_EMBEDDING_GROUP ： 嵌入对应的进程组。</li>
+<li>_DATA_PARALLEL_GROUP ：当前 rank 所属于的Data parallel group。
+<ul>
+<li>假如数据并行度数为2，则例子为[g0, g2], [g1, g3], [g4, g6], [g5, g7], [g8, g10], [g9, g11], [g12, g14], [g13, g15]。</li>
+</ul>
+</li>
+</ul>
+<p>具体如下：</p>
+<pre><code class="language-python"># Intra-layer model parallel group that the current rank belongs to.
+_TENSOR_MODEL_PARALLEL_GROUP = None
+# Inter-layer model parallel group that the current rank belongs to.
+_PIPELINE_MODEL_PARALLEL_GROUP = None
+# Model parallel group (both intra- and pipeline) that the current rank belongs to.
+_MODEL_PARALLEL_GROUP = None
+# Embedding group.
+_EMBEDDING_GROUP = None
+# Data parallel group that the current rank belongs to.
+_DATA_PARALLEL_GROUP = None
+
+_VIRTUAL_PIPELINE_MODEL_PARALLEL_RANK = None
+_VIRTUAL_PIPELINE_MODEL_PARALLEL_WORLD_SIZE = None
+_PIPELINE_MODEL_PARALLEL_SPLIT_RANK = None
+
+# These values enable us to change the mpu sizes on the fly.
+_MPU_TENSOR_MODEL_PARALLEL_WORLD_SIZE = None
+_MPU_PIPELINE_MODEL_PARALLEL_WORLD_SIZE = None
+_MPU_TENSOR_MODEL_PARALLEL_RANK = None
+_MPU_PIPELINE_MODEL_PARALLEL_RANK = None
+
+# A list of ranks that have a copy of the embedding.
+_EMBEDDING_GLOBAL_RANKS = None
+
+# A list of global ranks for each pipeline group to ease calculation of the source
+# rank when broadcasting from the first or last pipeline stage.
+_PIPELINE_GLOBAL_RANKS = None
+</code></pre>
+<h3 id="22-初始化代码">2.2 初始化代码</h3>
+<p>我们首先把 initialize_model_parallel 代码摘录出来。initialize_model_parallel 作用就是对模型进行分组，然后初始化进程组相关的各种全局变量。</p>
+<pre><code class="language-python">def initialize_model_parallel(tensor_model_parallel_size_=1,
+                              pipeline_model_parallel_size_=1,
+                              virtual_pipeline_model_parallel_size_=None,
+                              pipeline_model_parallel_split_rank_=None):
+    """
+    Initialize model data parallel groups.
+
+    Arguments:
+        tensor_model_parallel_size: number of GPUs used for tensor model parallelism.
+        pipeline_model_parallel_size: number of GPUs used for pipeline model parallelism.
+        virtual_pipeline_model_parallel_size: number of virtual stages (interleaved
+                                              pipeline).
+        pipeline_model_parallel_split_rank: for models with both encoder and decoder,
+                                            rank in pipeline with split point.
+
+
+    Let's say we have a total of 16 GPUs denoted by g0 ... g15 and we
+    use 2 GPUs to parallelize the model tensor, and 4 GPUs to parallelize
+    the model pipeline. The present function will
+    create 8 tensor model-parallel groups, 4 pipeline model-parallel groups
+    and 8 data-parallel groups as:
+        8 data_parallel groups:
+            [g0, g2], [g1, g3], [g4, g6], [g5, g7], [g8, g10], [g9, g11], [g12, g14], [g13, g15]
+        8 tensor model-parallel groups:
+            [g0, g1], [g2, g3], [g4, g5], [g6, g7], [g8, g9], [g10, g11], [g12, g13], [g14, g15]
+        4 pipeline model-parallel groups:
+            [g0, g4, g8, g12], [g1, g5, g9, g13], [g2, g6, g10, g14], [g3, g7, g11, g15]
+    Note that for efficiency, the caller should make sure adjacent ranks
+    are on the same DGX box. For example if we are using 2 DGX-1 boxes
+    with a total of 16 GPUs, rank 0 to 7 belong to the first box and
+    ranks 8 to 15 belong to the second box.
+    """
+    if torch.distributed.get_rank() == 0:
+        print('&gt; initializing tensor model parallel with size {}'.format(
+            tensor_model_parallel_size_))
+        print('&gt; initializing pipeline model parallel with size {}'.format(
+            pipeline_model_parallel_size_))
+    # Get world size and rank. Ensure some consistencies.
+    world_size = torch.distributed.get_world_size()
+    tensor_model_parallel_size = min(tensor_model_parallel_size_, world_size)
+    pipeline_model_parallel_size = min(pipeline_model_parallel_size_, world_size)
+    ensure_divisibility(world_size,
+                        tensor_model_parallel_size * pipeline_model_parallel_size)
+    data_parallel_size = world_size // (tensor_model_parallel_size *
+                                        pipeline_model_parallel_size)
+
+    num_tensor_model_parallel_groups = world_size // tensor_model_parallel_size
+    num_pipeline_model_parallel_groups = world_size // pipeline_model_parallel_size
+    num_data_parallel_groups = world_size // data_parallel_size
+
+    if virtual_pipeline_model_parallel_size_ is not None:
+        global _VIRTUAL_PIPELINE_MODEL_PARALLEL_RANK
+        global _VIRTUAL_PIPELINE_MODEL_PARALLEL_WORLD_SIZE
+        _VIRTUAL_PIPELINE_MODEL_PARALLEL_RANK = 0
+        _VIRTUAL_PIPELINE_MODEL_PARALLEL_WORLD_SIZE = virtual_pipeline_model_parallel_size_
+
+    if pipeline_model_parallel_split_rank_ is not None:
+        global _PIPELINE_MODEL_PARALLEL_SPLIT_RANK
+        _PIPELINE_MODEL_PARALLEL_SPLIT_RANK = pipeline_model_parallel_split_rank_
+
+    rank = torch.distributed.get_rank()
+
+    # Build the data-parallel groups.
+    global _DATA_PARALLEL_GROUP
+    all_data_parallel_group_ranks = []
+    for i in range(pipeline_model_parallel_size):
+        start_rank = i * num_pipeline_model_parallel_groups
+        end_rank = (i + 1) * num_pipeline_model_parallel_groups
+        for j in range(tensor_model_parallel_size):
+            ranks = range(start_rank + j, end_rank,
+                          tensor_model_parallel_size)
+            all_data_parallel_group_ranks.append(list(ranks))
+            group = torch.distributed.new_group(ranks)
+            if rank in ranks:
+                _DATA_PARALLEL_GROUP = group
+
+    # Build the model-parallel groups.
+    global _MODEL_PARALLEL_GROUP
+    for i in range(data_parallel_size):
+        ranks = [data_parallel_group_ranks[i]
+                 for data_parallel_group_ranks in all_data_parallel_group_ranks]
+        group = torch.distributed.new_group(ranks)
+        if rank in ranks:
+            _MODEL_PARALLEL_GROUP = group
+
+    # Build the tensor model-parallel groups.
+    global _TENSOR_MODEL_PARALLEL_GROUP
+    for i in range(num_tensor_model_parallel_groups):
+        ranks = range(i * tensor_model_parallel_size,
+                      (i + 1) * tensor_model_parallel_size)
+        group = torch.distributed.new_group(ranks)
+        if rank in ranks:
+            _TENSOR_MODEL_PARALLEL_GROUP = group
+
+    # Build the pipeline model-parallel groups and embedding groups
+    # (first and last rank in each pipeline model-parallel group).
+    global _PIPELINE_MODEL_PARALLEL_GROUP
+    global _PIPELINE_GLOBAL_RANKS
+    global _EMBEDDING_GROUP
+    global _EMBEDDING_GLOBAL_RANKS
+    for i in range(num_pipeline_model_parallel_groups):
+        ranks = range(i, world_size,
+                      num_pipeline_model_parallel_groups)
+        group = torch.distributed.new_group(ranks)
+        if rank in ranks:
+            _PIPELINE_MODEL_PARALLEL_GROUP = group
+            _PIPELINE_GLOBAL_RANKS = ranks
+        # Setup embedding group (to exchange gradients between
+        # first and last stages).
+        if len(ranks) &gt; 1:
+            embedding_ranks = [ranks[0], ranks[-1]]
+            if pipeline_model_parallel_split_rank_ is not None and \
+                    pipeline_model_parallel_split_rank_ not in embedding_ranks:
+                embedding_ranks = [ranks[0],
+                                   ranks[pipeline_model_parallel_split_rank_],
+                                   ranks[-1]]
+        else:
+            embedding_ranks = ranks
+        group = torch.distributed.new_group(embedding_ranks)
+        if rank in embedding_ranks:
+            _EMBEDDING_GROUP = group
+        if rank in ranks:
+            _EMBEDDING_GLOBAL_RANKS = embedding_ranks
+</code></pre>
+<h2 id="0x03-切分样例">0x03 切分样例</h2>
+<p>我们使用注释内容来进行学习如何切分模型，如何把多种并行模式组合在一起。</p>
+<h3 id="31-注释">3.1 注释</h3>
+<p>initialize_model_parallel 的注释值得我们深入学习，具体如下：</p>
+<pre><code>Let's say we have a total of 16 GPUs denoted by g0 ... g15 and we
+use 2 GPUs to parallelize the model tensor, and 4 GPUs to parallelize
+the model pipeline. The present function will
+create 8 tensor model-parallel groups, 4 pipeline model-parallel groups
+and 8 data-parallel groups as:
+    8 data_parallel groups:
+        [g0, g2], [g1, g3], [g4, g6], [g5, g7], [g8, g10], [g9, g11], [g12, g14], [g13, g15]
+    8 tensor model-parallel groups:
+        [g0, g1], [g2, g3], [g4, g5], [g6, g7], [g8, g9], [g10, g11], [g12, g13], [g14, g15]
+    4 pipeline model-parallel groups:
+        [g0, g4, g8, g12], [g1, g5, g9, g13], [g2, g6, g10, g14], [g3, g7, g11, g15]
+Note that for efficiency, the caller should make sure adjacent ranks
+are on the same DGX box. For example if we are using 2 DGX-1 boxes
+with a total of 16 GPUs, rank 0 to 7 belong to the first box and
+ranks 8 to 15 belong to the second box.
+</code></pre>
+<p>从注释可以知道如下信息：</p>
+<ul>
+<li>
+<p>假定目前有16个GPU，属于两个node，rank 0 ～7 属于第一个节点，rank 8 ～ 15 属于第二个节点。</p>
+</li>
+<li>
+<p>create 8 tensor model-parallel groups, 4 pipeline model-parallel groups，这说明将一个完整模型切分如下：</p>
+<ul>
+<li>沿着行横向切了一刀：tensor_model_parallel_size = 16 / 8 = 2，就是2个 GPUs 来进行模型张量并行。</li>
+<li>沿着列纵向切了三刀：pipeline_model_parallel_size = 16 /4 = 4，就是4个GPUs 进行流水线并行。</li>
+<li>因此，一个模型分为8块，每一块放在一个GPU之上，就是8个GPU。而通过如下计算可以知 16 GPUs / 8 GPUs = 2 models。即，16张卡可以放置两个完整模型。</li>
+</ul>
+</li>
+<li>
+<p>因为张量模型并行组大小是2，即16个GPU被分成8组，则这8组内容是 [g0, g1], [g2, g3], [g4, g5], [g6, g7], [g8, g9], [g10, g11], [g12, g13], [g14, g15]。</p>
+</li>
+<li>
+<p>因为流水线并行组大小是4，即16个GPU被分成4组，则这4组内容是[g0, g4, g8, g12], [g1, g5, g9, g13], [g2, g6, g10, g14], [g3, g7, g11, g15]。</p>
+</li>
+<li>
+<p>因为数据并行组大小是2，16个GPU被分成8组，则这8组内容是[g0, g2], [g1, g3], [g4, g6], [g5, g7], [g8, g10], [g9, g11], [g12, g14], [g13, g15]。</p>
+</li>
+<li>
+<p>以上这些进程组都是通过 torch.distributed.new_group 来完成，这样组内进程之间就知道哪些进程是在同一个组内，是在一起训练的，也知道怎么通信。</p>
+</li>
+</ul>
+<h3 id="32-切分情况">3.2 切分情况</h3>
+<p>模型原始图如下</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204730167-1554249556.png" alt="" loading="lazy"></p>
+<p>模型切分之后如下，一共被分成8块。其中，第一层被切分为 A，B，所以 A，B 之间就是 Tensor Model parallel。后面 C，D 之间也是 Tensor Model parallel，把两层都做了切分，依次类推。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204751060-66512780.png" alt="" loading="lazy"></p>
+<p><strong>我们的目标就是用代码来看看如何生成注释里面的各种模型组</strong>。</p>
+<h3 id="33-切分策略">3.3 切分策略</h3>
+<p>我们接下来看看具体切分的策略，也就是GPU分配策略。切分需要综合考虑多种情况，首先看看模型并行的通信状况。</p>
+<ul>
+<li><strong>张量并行</strong>：通信发生在每层的前向传播和后向传播过程之中，通信类型是all-reduce，不但单次通信数据量大，并且通信频繁。</li>
+<li><strong>流水线并行</strong>：通信在流水线阶段相邻的切分点之上，通信类型是P2P通信，单词通信数据量较少但是比较频繁，而且因为流水线的特点，会产生GPU空闲时间，这里称为流水线气泡（Bubble）。</li>
+</ul>
+<p>我们接下来看看各种并行机制的对比。</p>
+<ul>
+<li><strong>Tensor versus Pipeline Parallelism</strong>. 张量模型的并行性在节点内是最好的，因为它会减少通信量。另一方面，流水线模型并行使用更便宜的点对点通信，可以跨节点执行，而不会限制整个计算。然而，流水线并行性会在流水线气泡中花费大量时间，因此，应限制流水线级的总数，以便流水线中的microbatches数量是流水线深度的合理倍数。当张量并行大小等于单个节点中的GPU数量时会达到峰值性能。</li>
+<li><strong>Pipeline versus Data Parallelism.</strong> 对于每个batch size，吞吐量随着流水线并行规模的增加而降低。流水线模型并行应该主要用于支持不适合单个 worker 的大型模型训练。而数据并行应该用于扩大训练规模。</li>
+<li><strong>Tensor versus Data Parallelism.</strong> 接下来看看数据和张量模型的并行性对性能的影响。在较大的批处理量和微批处理量为1的情况下，数据并行通信并不频繁；张量模型并行需要对批处理中的每个微批进行all-to-all通信。这种all-to-all的通信主导了端到端的训练时间，特别是当通信需要在多GPU节点上进行时。此外，随着张量模型并行规模的增加，我们在每个GPU上执行较小的矩阵乘法（因为会把模型张量进行切分），这降低了每个GPU的利用率。</li>
+</ul>
+<p>最后看看结论</p>
+<ul>
+<li>Tensor模型并行被用于intra-node transformer 层，因为张量并行计算密集且是耗费大量带宽，这样会在HGX based系统上高效运行。</li>
+<li>Pipeline 模型并行主要被用于inter-node transformer 层，因为Pipeline 并行的通信带宽占用少，其可以有效利用集群中多网卡设计。</li>
+<li>数据并行则在前两者基础之上进行加持，使得训练可以扩展到更大规模和更快的速度。我们应该注意到，尽管数据并行可以带来高效的扩展，但我们不能单独使用数据并行来处理训练超大模型，因为 a）内存容量不足，b）数据并行的扩展限制。</li>
+</ul>
+<h3 id="34-实验">3.4 实验</h3>
+<p>我们接下来做一个实验看看。</p>
+<pre><code class="language-python">import torch
+
+world_size = 16
+tensor_model_parallel_size = 2 # 2 GPUs to parallelize the model tensor
+pipeline_model_parallel_size = 4 # 4 GPUs to parallelize the model pipeline
+data_parallel_size = world_size // (tensor_model_parallel_size *
+                                    pipeline_model_parallel_size) # 2
+num_tensor_model_parallel_groups = world_size // tensor_model_parallel_size # 8
+num_pipeline_model_parallel_groups = world_size // pipeline_model_parallel_size # 4
+num_data_parallel_groups = world_size // data_parallel_size # 8
+
+# Build the data-parallel groups.
+print("------ Build the data-parallel groups -----")
+all_data_parallel_group_ranks = []
+for i in range(pipeline_model_parallel_size):
+    start_rank = i * num_pipeline_model_parallel_groups
+    end_rank = (i + 1) * num_pipeline_model_parallel_groups
+    for j in range(tensor_model_parallel_size):
+        ranks = range(start_rank + j, end_rank,
+                      tensor_model_parallel_size)
+        all_data_parallel_group_ranks.append(list(ranks))
+print(all_data_parallel_group_ranks)
+
+# Build the model-parallel groups.
+print("------ Build the model-parallel groups -----")
+for i in range(data_parallel_size):
+    ranks = [data_parallel_group_ranks[i]
+             for data_parallel_group_ranks in all_data_parallel_group_ranks]
+    print(list(ranks))
+
+# Build the tensor model-parallel groups.
+print("------ Build the tensor model-parallel groups -----")
+for i in range(num_tensor_model_parallel_groups):
+    ranks = range(i * tensor_model_parallel_size,
+                  (i + 1) * tensor_model_parallel_size)
+    print(list(ranks))
+
+# Build the pipeline model-parallel groups and embedding groups
+# (first and last rank in each pipeline model-parallel group).
+print("------ Build the pipeline model-parallel groups -----")
+for i in range(num_pipeline_model_parallel_groups):
+    ranks = range(i, world_size,
+                  num_pipeline_model_parallel_groups)
+    print(list(ranks))
+</code></pre>
+<p>输出如下。需要注意，这里都是 GPU 的序列号，[0,2] 就是 [g0, g2]：</p>
+<pre><code class="language-cpp">------ Build the data-parallel groups -----
+[[0, 2], [1, 3], [4, 6], [5, 7], [8, 10], [9, 11], [12, 14], [13, 15]]
+------ Build the model-parallel groups -----
+[0, 1, 4, 5, 8, 9, 12, 13]
+[2, 3, 6, 7, 10, 11, 14, 15]
+------ Build the tensor model-parallel groups -----
+[0, 1]
+[2, 3]
+[4, 5]
+[6, 7]
+[8, 9]
+[10, 11]
+[12, 13]
+[14, 15]
+------ Build the pipeline model-parallel groups -----
+[0, 4, 8, 12]
+[1, 5, 9, 13]
+[2, 6, 10, 14]
+[3, 7, 11, 15]
+
+我们对比一下注释，发现代码打印结果可以和注释对应上：
+    Let's say we have a total of 16 GPUs denoted by g0 ... g15 and we
+    use 2 GPUs to parallelize the model tensor, and 4 GPUs to parallelize
+    the model pipeline. The present function will
+    create 8 tensor model-parallel groups, 4 pipeline model-parallel groups
+    and 8 data-parallel groups as:
+        8 data_parallel groups:
+            [g0, g2], [g1, g3], [g4, g6], [g5, g7], [g8, g10], [g9, g11], [g12, g14], [g13, g15]
+        8 tensor model-parallel groups:
+            [g0, g1], [g2, g3], [g4, g5], [g6, g7], [g8, g9], [g10, g11], [g12, g13], [g14, g15]
+        4 pipeline model-parallel groups:
+            [g0, g4, g8, g12], [g1, g5, g9, g13], [g2, g6, g10, g14], [g3, g7, g11, g15]
+</code></pre>
+<p>我们接下来会进行具体分析。</p>
+<h2 id="0x04-起始状态">0x04 起始状态</h2>
+<h3 id="41-gpu-状况">4.1 GPU 状况</h3>
+<p>从注释中可以看到：</p>
+<pre><code>Note that for efficiency, the caller should make sure adjacent ranks are on the same DGX box. For example if we are using 2 DGX-1 boxes with a total of 16 GPUs, rank 0 to 7 belong to the first box and ranks 8 to 15 belong to the second box.
+</code></pre>
+<p>意思就是：调用者需要确保相邻的rank在同一个节点上，我们例子有两个Node，其中第一个Node拥有 GPU 0 ～ 7，就是 rank 0 ～ 7，第二个Node是 GPU 8～15，就是 rank 8 ～ 15。</p>
+<p>具体如下，这里每行4个GPU，是因为 4 GPUs to parallelize the model pipeline，所以<u>流水线每个stage是4个GPU</u>。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204806543-1100351212.jpg" alt="" loading="lazy"></p>
+<h3 id="42-符号说明">4.2 符号说明</h3>
+<p>下面是论文之中提到的一些符号，这里有必要再取出来温习一下：</p>
+<ul>
+<li>
+<p>(𝑝, 𝑡, 𝑑): Parallelization dimensions.</p>
+</li>
+<li>
+<p>𝑝 for the pipeline-modelparallel size,</p>
+</li>
+<li>
+<p>𝑡 for the tensor-model-parallel size, and 𝑑 for the data-parallel size.</p>
+</li>
+<li>
+<p>𝑛: Number of GPUs. We require 𝑝 · 𝑡 · 𝑑 = 𝑛.</p>
+</li>
+</ul>
+<h3 id="43-初始分组">4.3 初始分组</h3>
+<p>依据注释，我们得出目前分组情况和一些全局信息。</p>
+<ul>
+<li>一共16个GPU，所以 world_size 为 16。就是 Notation 之中的 n。</li>
+<li>使用两个GPU进行 model tensor 并行，所以  tensor_model_parallel_size = 2。就是  Notation 之中的 t。</li>
+<li>使用四个GPU进行模型流水线并行，所以 pipeline_model_parallel_size = 4。就是 Notation 之中的 p。其实，就是流水线深度为 4，即，4 个 GPU 是串行的。</li>
+<li>依据上面定义，d = n / ( t * p) = 2，就是 data_parallel_size = 2。因为 t * p 就是一个模型所需要的 GPU，d = (总 GPU / 一个模型需要的 GPU)，结果是这些GPU可以训练 d 个模型，就是可以用 d 个 mini-batches 进行这个 d个模型一起训练，所以数据并行度为 d。</li>
+</ul>
+<p>接下来结合代码看看需要分成多少个process groups，他们在代码之中的变量是什么。</p>
+<ul>
+<li>num_tensor_model_parallel_groups 就是从 tensor model 并行角度看，分成8 个进程roup。</li>
+<li>num_pipeline_model_parallel_groups = world_size // pipeline_model_parallel_size 就是从 model 并行角度看，分成 4 个 进程group。</li>
+<li>num_data_parallel_groups = world_size // data_parallel_size  就是从data 并行角度看，分成8 个 进程group。就是会有 8 个 DDP，每个 DDP 包括 2 个 rank。</li>
+<li>还有一个 _MODEL_PARALLEL_GROUP，</li>
+</ul>
+<p>具体如下：</p>
+<pre><code class="language-python">world_size = 16
+tensor_model_parallel_size = 2 # 2 GPUs to parallelize the model tensor
+pipeline_model_parallel_size = 4 # 4 GPUs to parallelize the model pipeline
+data_parallel_size = world_size // (tensor_model_parallel_size *
+                                    pipeline_model_parallel_size) # 2
+num_tensor_model_parallel_groups = world_size // tensor_model_parallel_size # 8
+num_pipeline_model_parallel_groups = world_size // pipeline_model_parallel_size # 4
+num_data_parallel_groups = world_size // data_parallel_size # 8
+</code></pre>
+<h2 id="0x05-tensor-model-parallel">0x05 Tensor model-parallel</h2>
+<p>本节我们分析的是，如何将 Node 上的 GPU 分给 tensor model 并行组。</p>
+<h3 id="51-分组">5.1 分组</h3>
+<p>对于注释例子，16 / 2 = 8，分成 8 个进程组，每个组 两个 rank。这些分组分别是：[g0, g1], [g2, g3], [g4, g5], [g6, g7], [g8, g9], [g10, g11], [g12, g13], [g14, g15]，我们得到了如下信息：</p>
+<ul>
+<li>
+<p>[g0, g1] 就是某一层分切为2半，分别被 g0, g1 来执行，[g2, g3] 表示另一层被分为两层，分别被 g2，g3 来执行。</p>
+</li>
+<li>
+<p>我们可以看到，每一个 tensor-model-parallel group的 rank一定是相邻的，比如 [g0, g1], [g2, g3]。</p>
+</li>
+<li>
+<p>注意，0 ~ 7 不代表是同一个模型。0 ~ 7 是同一个 Node 上的 GPU，这点容易被混淆。</p>
+</li>
+</ul>
+<p>我们再看看代码：</p>
+<pre><code class="language-python">    # Build the tensor model-parallel groups.
+    global _TENSOR_MODEL_PARALLEL_GROUP
+    for i in range(num_tensor_model_parallel_groups): # 8
+        ranks = range(i * tensor_model_parallel_size,
+                      (i + 1) * tensor_model_parallel_size)
+        group = torch.distributed.new_group(ranks) # 就有生成 8 组
+        if rank in ranks: 
+            # 如果本rank在某一list之中，即1 在 [0,1] 之中，则本 rank 就属于 new_group([0,1])
+            _TENSOR_MODEL_PARALLEL_GROUP = group 
+</code></pre>
+<p>我们实验之中在这里得到：</p>
+<pre><code>------ Build the tensor model-parallel groups -----
+[0, 1]
+[2, 3]
+[4, 5]
+[6, 7]
+[8, 9]
+[10, 11]
+[12, 13]
+[14, 15]
+
+</code></pre>
+<p>对应我们图上如下，每个 tensor model group 用一个虚线小矩形框标示，一共8个：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204816668-1998353940.jpg" alt="" loading="lazy"></p>
+<p>_TENSOR_MODEL_PARALLEL_GROUP = group 就记录了本rank的进程组信息，比如 <strong>rank 2</strong>，它的 _TENSOR_MODEL_PARALLEL_GROUP 内容就是：group([g2, g3])。</p>
+<h3 id="52-使用">5.2 使用</h3>
+<p>我们接下来看看如何使用。</p>
+<p>get_tensor_model_parallel_group 返回了自己 rank 对应的 tensor model group。</p>
+<pre><code class="language-python">def get_tensor_model_parallel_group():
+    """Get the tensor model parallel group the caller rank belongs to."""
+    return _TENSOR_MODEL_PARALLEL_GROUP
+
+</code></pre>
+<p>在 megatron/mpu/mappings.py 之中有对 tensor model group 的使用：</p>
+<pre><code class="language-python">def _reduce(input_):
+    """All-reduce the input tensor across model parallel group."""
+
+    # Bypass the function if we are using only 1 GPU.
+    if get_tensor_model_parallel_world_size()==1:
+        return input_
+
+    # All-reduce.
+    torch.distributed.all_reduce(input_, group=get_tensor_model_parallel_group())
+
+    return input_
+
+</code></pre>
+<p>就是<u>当流水线反向传播时候，利用 _TENSOR_MODEL_PARALLEL_GROUP 进行在组内进行集合通信</u>。</p>
+<h2 id="0x06-pipe-parallel">0x06 Pipe-parallel</h2>
+<p>本节我们分析的是，如何将 Node 上的 GPU 分给 pipeline model 并行组。</p>
+<h3 id="61-分组">6.1 分组</h3>
+<p>从注释可以看到，流水线分组就是把这个16个GPU 分成 4 组，每组 4 个 GPU，得到   [g0, g4, g8, g12], [g1, g5, g9, g13], [g2, g6, g10, g14], [g3, g7, g11, g15]，我们得到了如下信息：</p>
+<ul>
+<li>
+<p>每组的四个GPU进行模型流水线并行，所以 pipeline_model_parallel_size = 4。就是 Notation 之中的 p。其实，就是流水线深度为 4， 每组内 4 个 GPU 是串行的。即， [g0, g4, g8, g12] 这4个 GPU是串行的。</p>
+</li>
+<li>
+<p>再看看流水线的每一层，含有 16 / 4 = 4 个 GPU，能看到第一层是 0 ~ 4，第二层是 5 ~ 8，......。</p>
+</li>
+<li>
+<p>可以看到，流水线的 group是隔 n // p个取一个，比如[0, 4, 8, 12]。</p>
+</li>
+<li>
+<p>对于流水线每个stage，则是stage i 的 rank 范围是：[(i-1) * n//p, (i) * n//p]，即 rank 2 所在的stage 的rank是 [0,1,2,3]。</p>
+</li>
+<li>
+<p>_PIPELINE_MODEL_PARALLEL_GROUP 得到了本rank对应的流水线进程组。</p>
+</li>
+<li>
+<p>_PIPELINE_GLOBAL_RANKS 得到了进程组的ranks。</p>
+</li>
+<li>
+<p><u>假如本进程是 rank 2，则流水线进程组 ranks 是 [g2, g6, g10, g14]</u>。</p>
+</li>
+</ul>
+<p>具体代码如下：</p>
+<pre><code class="language-python">    # Build the pipeline model-parallel groups and embedding groups
+    # (first and last rank in each pipeline model-parallel group).
+    global _PIPELINE_MODEL_PARALLEL_GROUP
+    global _PIPELINE_GLOBAL_RANKS
+    global _EMBEDDING_GROUP
+    for i in range(num_pipeline_model_parallel_groups): # 4
+        ranks = range(i, world_size, # 每隔 n // p个取一个
+                      num_pipeline_model_parallel_groups)
+        group = torch.distributed.new_group(ranks)
+        if rank in ranks:
+            _PIPELINE_MODEL_PARALLEL_GROUP = group
+            _PIPELINE_GLOBAL_RANKS = ranks
+        # Setup embedding group (to exchange gradients between
+        # first and last stages).
+        if len(ranks) &gt; 1:
+            embedding_ranks = [ranks[0], ranks[-1]]
+        else:
+            embedding_ranks = ranks
+        group = torch.distributed.new_group(embedding_ranks)
+        if rank in embedding_ranks:
+            _EMBEDDING_GROUP = group
+
+</code></pre>
+<p>我们拓展之前图如下，现在看到增加了 4 条从上到下的虚线箭头，分别对应了 4 组流水线串行。横向层是从 Stage 0 ~ Stage 3。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204825760-164293937.jpg" alt="" loading="lazy"></p>
+<h3 id="62-使用">6.2 使用</h3>
+<p>接下来看看如何使用。</p>
+<p>get_pipeline_model_parallel_group 返回了自己 rank 对应的 pipeline model group。</p>
+<pre><code class="language-python">def get_pipeline_model_parallel_group():
+    """Get the pipeline model parallel group the caller rank belongs to."""
+    return _PIPELINE_MODEL_PARALLEL_GROUP
+
+</code></pre>
+<p>具体使用是在 megatron/p2p_communication.py，_communicate 之中会用流水线组信息来进行通信。这里省略了大部分代码。</p>
+<pre><code class="language-python">def _communicate(tensor_send_next, tensor_send_prev, recv_prev, recv_next,
+                 use_ring_exchange=False, tensor_shape=None,
+                 override_scatter_gather_tensors_in_pipeline=False,
+                 dtype_=None):
+    """Communicate tensors between stages. Used as helper method in other
+    communication methods that are used in megatron/schedules.py.
+    """
+
+    # Send tensors in both the forward and backward directions as appropriate.
+    if use_ring_exchange: # 这里使用get_pipeline_model_parallel_group 进行通信
+        torch.distributed.ring_exchange(tensor_send_prev=tensor_send_prev,
+                                        tensor_recv_prev=tensor_recv_prev,
+                                        tensor_send_next=tensor_send_next,
+                                        tensor_recv_next=tensor_recv_next,
+                                        group=mpu.get_pipeline_model_parallel_group())
+    else:
+        ops = []
+        if tensor_send_prev is not None:
+            send_prev_op = torch.distributed.P2POp(
+                torch.distributed.isend, tensor_send_prev,
+                mpu.get_pipeline_model_parallel_prev_rank()) # 得到流水线前一个rank
+            ops.append(send_prev_op)
+        if tensor_recv_prev is not None:
+            recv_prev_op = torch.distributed.P2POp(
+                torch.distributed.irecv, tensor_recv_prev,
+                mpu.get_pipeline_model_parallel_prev_rank())
+            ops.append(recv_prev_op)
+        if tensor_send_next is not None:
+            send_next_op = torch.distributed.P2POp(
+                torch.distributed.isend, tensor_send_next,
+                mpu.get_pipeline_model_parallel_next_rank()) # 得到流水线下一个rank
+            ops.append(send_next_op)
+        if tensor_recv_next is not None:
+            recv_next_op = torch.distributed.P2POp(
+                torch.distributed.irecv, tensor_recv_next,
+                mpu.get_pipeline_model_parallel_next_rank())
+            ops.append(recv_next_op)
+
+
+</code></pre>
+<h4 id="621-上下游rank">6.2.1 上下游rank</h4>
+<p>具体如何得到流水线上下游的rank？是通过 get_pipeline_model_parallel_next_rank 和 get_pipeline_model_parallel_prev_rank 来完成。其中_PIPELINE_GLOBAL_RANKS 得到了进程组的ranks，假如本进程是 rank 2，则流水线进程组 ranks 是 [g2, g6, g10, g14]。</p>
+<pre><code class="language-python">def get_pipeline_model_parallel_next_rank():
+    rank_in_pipeline = get_pipeline_model_parallel_rank()
+    world_size = get_pipeline_model_parallel_world_size()
+    return _PIPELINE_GLOBAL_RANKS[(rank_in_pipeline + 1) % world_size]
+
+def get_pipeline_model_parallel_prev_rank():
+    rank_in_pipeline = get_pipeline_model_parallel_rank()
+    world_size = get_pipeline_model_parallel_world_size()
+    return _PIPELINE_GLOBAL_RANKS[(rank_in_pipeline - 1) % world_size]
+
+</code></pre>
+<h4 id="622-world-size">6.2.2 world size</h4>
+<p>get_pipeline_model_parallel_world_size 得到了进程组的 world size。</p>
+<pre><code class="language-python">def get_pipeline_model_parallel_world_size():
+    """Return world size for the pipeline model parallel group."""
+    global _MPU_PIPELINE_MODEL_PARALLEL_WORLD_SIZE
+    if _MPU_PIPELINE_MODEL_PARALLEL_WORLD_SIZE is not None:
+        return _MPU_PIPELINE_MODEL_PARALLEL_WORLD_SIZE
+    return torch.distributed.get_world_size(group=get_pipeline_model_parallel_group())
+
+</code></pre>
+<h2 id="0x07-data-parallel">0x07 Data-parallel</h2>
+<p>我们接下来看看数据并行。</p>
+<h3 id="71-分组">7.1 分组</h3>
+<p>对于注释例子，16 / 2 = 8，分成 8 个进程组，每个组 两个 rank。这些分组分别是：[g0, g2], [g1, g3], [g4, g6], [g5, g7], [g8, g10], [g9, g11], [g12, g14], [g13, g15]，我们得到了如下信息：</p>
+<ul>
+<li>依据上面分析， t * p 就是一个模型所需要的 GPU，因此，d = (总 GPU 数目 / 一个模型需要的 GPU 数目) =  n / ( t * p)，就是说，目前提供的这 n 个GPU可以同时训练 d 个模型，就是可以用 d 个 mini-batches 输入到这 d 个模型一起训练，所以数据并行度为 d。</li>
+<li>对应注释例子，就是data_parallel_size = 16 / (2 * 4) = 2。</li>
+<li>rank 2 对应的数据并行进程组是[g0, g2]。</li>
+</ul>
+<p>我们再看看用代码怎么确定有哪些group，每个group里面包含什么。</p>
+<ul>
+<li>首先，流水线被分成了 p 个 stage，对于流水线每个stage，其有 n // p 个GPU，stage i 的 rank 范围是：[i * n//p, (i+1) * n//p]，即 rank 2所在的stage 的rank是 [0,1,2,3]。</li>
+<li>其次，在每一个stage之中，<code>ranks = range(start_rank + j, end_rank, tensor_model_parallel_size)</code> ，意思是这stage的n//p个GPUs中，每隔 t 个取一个作为数据并行 group 之中的一份子，因此每个data-parallel group大小为 n // p // t = d。</li>
+</ul>
+<p>具体代码如下：</p>
+<pre><code class="language-python">    # Build the data-parallel groups.
+    global _DATA_PARALLEL_GROUP
+    assert _DATA_PARALLEL_GROUP is None, \
+        'data parallel group is already initialized'
+    all_data_parallel_group_ranks = []
+    for i in range(pipeline_model_parallel_size): # 遍历流水线深度
+        start_rank = i * num_pipeline_model_parallel_groups # 找到每个stage的起始rank
+        end_rank = (i + 1) * num_pipeline_model_parallel_groups # 找到每个stage的终止rank
+        for j in range(tensor_model_parallel_size): # 遍历tensor model分组size
+            ranks = range(start_rank + j, end_rank, # 每隔 t 个取一个作为数据并行group中的一份子
+                          tensor_model_parallel_size)
+            all_data_parallel_group_ranks.append(list(ranks))
+            group = torch.distributed.new_group(ranks)
+            if rank in ranks:
+                _DATA_PARALLEL_GROUP = group
+
+</code></pre>
+<p>打印输出如下，和注释一致。</p>
+<pre><code class="language-python">------ Build the data-parallel groups -----
+[[0, 2], [1, 3], [4, 6], [5, 7], [8, 10], [9, 11], [12, 14], [13, 15]]
+
+</code></pre>
+<p>对应图片拓展如下：其中，每个新增的双箭头对应一个DDP（两个rank），比如[2, 3]对应一个DDP。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204840550-2116456050.jpg" alt="" loading="lazy"></p>
+<h3 id="72-如何使用">7.2 如何使用</h3>
+<p>我们接下来看看如何使用。</p>
+<p>get_data_parallel_group 会得到本rank对应的 _DATA_PARALLEL_GROUP。</p>
+<pre><code class="language-python">def get_data_parallel_group():
+    """Get the data parallel group the caller rank belongs to."""
+    return _DATA_PARALLEL_GROUP
+
+</code></pre>
+<p>在 allreduce_gradients之中，会对本数据并行组进行all-reduce。</p>
+<pre><code class="language-python">    def allreduce_gradients(self):
+        """Reduce gradients across data parallel ranks."""
+        # If we have buffers, simply reduce the data in the buffer.
+        if self._grad_buffers is not None:
+            for _, buffer_ in self._grad_buffers.items():
+                buffer_.data /= mpu.get_data_parallel_world_size() # 数据并行 world size
+                torch.distributed.all_reduce(
+                    buffer_.data, group=mpu.get_data_parallel_group()) # 数据并行组
+        else:
+            # Otherwise, bucketize and all-reduce
+            buckets = {}
+            # Pack the buckets.
+            for param in self.module.parameters():
+                if param.requires_grad and param.grad is not None:
+                    tp = param.data.type()
+                    if tp not in buckets:
+                        buckets[tp] = []
+                    buckets[tp].append(param)
+                    param.main_grad = param.grad
+
+            # For each bucket, all-reduce and copy all-reduced grads.
+            for tp in buckets:
+                bucket = buckets[tp]
+                grads = [param.grad.data for param in bucket]
+                coalesced = _flatten_dense_tensors(grads)
+                coalesced /= mpu.get_data_parallel_world_size()
+                torch.distributed.all_reduce(
+                    coalesced, group=mpu.get_data_parallel_group())
+                for buf, synced in zip(grads, _unflatten_dense_tensors(
+                        coalesced, grads)):
+                    buf.copy_(synced)
+
+</code></pre>
+<h2 id="0x08-模型组">0x08 模型组</h2>
+<p>前面实验中，我们得到模型并行组如下：[0, 1, 4, 5, 8, 9, 12, 13] [2, 3, 6, 7, 10, 11, 14, 15]。生成代码如下：</p>
+<pre><code class="language-python">    # Build the model-parallel groups.
+    global _MODEL_PARALLEL_GROUP
+    for i in range(data_parallel_size):
+        ranks = [data_parallel_group_ranks[i]
+                 for data_parallel_group_ranks in all_data_parallel_group_ranks]
+        group = torch.distributed.new_group(ranks)
+        if rank in ranks:
+            _MODEL_PARALLEL_GROUP = group
+
+</code></pre>
+<p>_MODEL_PARALLEL_GROUP 会得到本rank对应的模型组。</p>
+<pre><code class="language-python">def get_model_parallel_group():
+    """Get the model parallel group the caller rank belongs to."""
+    return _MODEL_PARALLEL_GROUP
+
+</code></pre>
+<p>这里是裁剪梯度会用到，就是在本模型的全部rank之中进行梯度裁剪相关操作。</p>
+<pre><code class="language-python">def clip_grad_norm_fp32(parameters, max_norm, norm_type=2):
+    """Clips gradient norm of an iterable of parameters whose gradients
+       are in fp32.
+
+    This is adapted from torch.nn.utils.clip_grad.clip_grad_norm_ and
+    added functionality to handle model parallel parameters. Note that
+    the gradients are modified in place.
+
+    Arguments:
+        parameters (Iterable[Tensor] or Tensor): an iterable of Tensors or a
+            single Tensor that will have gradients normalized
+        max_norm (float or int): max norm of the gradients
+        norm_type (float or int): type of the used p-norm. Can be ``'inf'`` for
+            infinity norm.
+
+    Returns:
+        Total norm of the parameters (viewed as a single vector).
+    """
+
+    if isinstance(parameters, torch.Tensor):
+        parameters = [parameters]
+
+    # Filter parameters based on:
+    #   - grad should not be none
+    #   - parameter should not be shared
+    #   - should not be a replica due to tensor model parallelism
+    grads = []
+    grads_for_norm = []
+    for param in parameters:
+        grad_not_none = param.grad is not None
+        is_not_shared = param_is_not_shared(param)
+        is_not_tp_duplicate = param_is_not_tensor_parallel_duplicate(param)
+        grad = param.grad.detach()
+        if grad_not_none:
+            # Make sure the grads are in fp32
+            grads.append(grad)
+        if grad_not_none and is_not_shared and is_not_tp_duplicate:
+            grads_for_norm.append(grad)
+
+    # Norm parameters.
+    max_norm = float(max_norm)
+    norm_type = float(norm_type)
+    total_norm = 0.0
+
+    # Calculate norm.
+    if norm_type == inf:
+        total_norm = max(grad.abs().max() for grad in grads_for_norm)
+        total_norm_cuda = torch.cuda.FloatTensor([float(total_norm)])
+        # Take max across all model-parallel GPUs.
+        torch.distributed.all_reduce(total_norm_cuda,
+                                     op=torch.distributed.ReduceOp.MAX,
+                                     group=mpu.get_model_parallel_group()) # 模型组信息
+        total_norm = total_norm_cuda[0].item()
+
+    else:
+        if norm_type == 2.0:
+            dummy_overflow_buf = torch.cuda.IntTensor([0])
+            # Use apex's multi-tensor applier for efficiency reasons.
+            # Multi-tensor applier takes a function and a list of list
+            # and performs the operation on that list all in one kernel.
+            grad_norm, _ = multi_tensor_applier(
+                amp_C.multi_tensor_l2norm,
+                dummy_overflow_buf,
+                [grads_for_norm],
+                False # no per-parameter norm
+            )
+            # Since we will be summing across data parallel groups,
+            # we need the pow(norm-type).
+            total_norm = grad_norm ** norm_type
+
+        else:
+            for grad in grads_for_norm:
+                grad_norm = torch.norm(grad, norm_type)
+                total_norm += grad_norm ** norm_type
+
+        # Sum across all model-parallel GPUs.
+        torch.distributed.all_reduce(total_norm,
+                                     op=torch.distributed.ReduceOp.SUM,
+                                     group=mpu.get_model_parallel_group()) # 模型组信息
+        total_norm = total_norm.item() ** (1.0 / norm_type)
+
+    # Scale.
+    clip_coeff = max_norm / (total_norm + 1.0e-6)
+    if clip_coeff &lt; 1.0:
+        dummy_overflow_buf = torch.cuda.IntTensor([0])
+        multi_tensor_applier(amp_C.multi_tensor_scale,
+                             dummy_overflow_buf,
+                             [grads, grads],
+                             clip_coeff)
+
+    return total_norm
+
+</code></pre>
+<p>之前的图如下，利用看到分成两组，左边是Model 0 对应的全部ranks，右面是model 1 的ranks。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204849363-1362616656.jpg" alt="" loading="lazy"></p>
+<h2 id="0x09-如何把模型分到gpu">0x09 如何把模型分到GPU</h2>
+<p>我们最后还有一个问题没有涉及，就是如何把模型分块放到对应的GPU之上。就是如何与最初分成A，B，..., H 的那个图对应起来。其实，<u>不是根据模型来把模型部分拷贝到对应的rank或者GPU，而是rank或者GPU主动过来拷贝自己对应的层</u>。</p>
+<ul>
+<li>因为调用了 mpu.initialize_model_parallel 来设置模型并行，数据并行等各种进程组，所以每个 rank 对应的进程都有自己的全局变量，具体其实就是进程自动就被映射到GPU上了。比如 rank 2 对应的进程在启动之后才知道自己是 rank 2，然后从初始化的全局变量之中知道自己的 data_parallel group 是 [g0, g2]，tensor model-parallel group 是[g2, g3]，pipeline model-parallel group 是 [g2, g6, g10, g14]。</li>
+<li>ParallelTransformer 的初始化之中，offset 就是根据 rank 知道自己应该生成模型的那些层，然后通过 self.layers = torch.nn.ModuleList([build_layer(i + 1 + offset) for i in range(self.num_layers)]) 来生成对应的层。</li>
+<li>get_model 方法也会根据自己的 pipeline rank 和 is_pipeline_first_stage 来知道是不是第一层或者最后一层，然后做相应处理。</li>
+<li>最后把模型参数拷贝到了自己对应的 GPU 之上。</li>
+</ul>
+<p>具体 ParallelTransformer 初始化代码如下：</p>
+<pre><code class="language-python">class ParallelTransformer(MegatronModule):
+    """Transformer class."""
+
+    def __init__(self, init_method, output_layer_init_method,
+                 layer_type=LayerType.encoder,
+                 self_attn_mask_type=AttnMaskType.padding,
+                 pre_process=True, post_process=True):
+        super(ParallelTransformer, self).__init__()
+        args = get_args()
+        
+        # 省略代码
+        
+        # Transformer layers.
+        def build_layer(layer_number):
+            return ParallelTransformerLayer(
+                init_method,
+                output_layer_init_method,
+                layer_number,
+                layer_type=layer_type,
+                self_attn_mask_type=self_attn_mask_type)
+      
+        # 下面 offset 就是根据rank知道自己应该生成模型的那些层
+        if args.virtual_pipeline_model_parallel_size is not None:
+            # Number of layers in each model chunk is the number of layers in the stage,
+            # divided by the number of model chunks in a stage.
+            self.num_layers = self.num_layers // args.virtual_pipeline_model_parallel_size
+            # With 8 layers, 2 stages, and 4 model chunks, we want an assignment of
+            # layers to stages like (each list is a model chunk):
+            # Stage 0: [0]  [2]  [4]  [6]
+            # Stage 1: [1]  [3]  [5]  [7]
+            # With 8 layers, 2 stages, and 2 virtual stages, we want an assignment of
+            # layers to stages like (each list is a model chunk):
+            # Stage 0: [0, 1]  [4, 5]
+            # Stage 1: [2, 3]  [6, 7]
+            offset = mpu.get_virtual_pipeline_model_parallel_rank() * (
+                args.num_layers // args.virtual_pipeline_model_parallel_size) + \
+                (mpu.get_pipeline_model_parallel_rank() * self.num_layers)
+        else:
+            # Each stage gets a contiguous set of layers.
+            offset = mpu.get_pipeline_model_parallel_rank() * self.num_layers
+
+        self.layers = torch.nn.ModuleList(
+            [build_layer(i + 1 + offset) for i in range(self.num_layers)])
+
+        if self.post_process:
+            # Final layer norm before output.
+            self.final_layernorm = LayerNorm(
+                args.hidden_size,
+                eps=args.layernorm_epsilon)
+
+</code></pre>
+<p>所以，最终效果如下，其中同名子模块具有同样的参数，可以数据并行，即两个A可以数据并行。一列上的层之间可以流水线串行，比如  A--&gt; C --&gt; E --&gt; G 就是串行，而一个横行4个是流水线的一个stage，其中从0开始，横向相邻两个GPU是 tensor model 并行。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202202/1850883-20220209204859943-717373290.jpg" alt="" loading="lazy"></p>
+<h2 id="0xff-参考">0xFF 参考</h2>
+<p><a href="https://zhuanlan.zhihu.com/p/388830967" target="_blank" rel="noopener nofollow">[细读经典]Megatron论文和代码详细分析(2)</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/366906920" target="_blank" rel="noopener nofollow">[细读经典]Megatron论文和代码详细分析(1)</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/405883984" target="_blank" rel="noopener nofollow">Megatron-LM源码阅读（一）</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/407094090" target="_blank" rel="noopener nofollow">Megatron-LM源码阅读（二）</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/381326200" target="_blank" rel="noopener nofollow">megatron学习总结</a></p>
+<p><a href="https://developer.nvidia.com/gtc/2020/video/s21496" target="_blank" rel="noopener nofollow">GTC 2020: Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism</a></p>
+<p><a href="https://www.zhihu.com/question/42770716" target="_blank" rel="noopener nofollow">如何评价 NVIDIA 发布的 DGX-1？</a></p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1183.9247430124467" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-02-10 18:42">2022-02-10 18:42</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">8368</span>)&nbsp;
+评论(<span id="post_comment_count">0</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15876714);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15876714', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15876714.html', title: '[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15876714, cb_entryCreatedDate = '2022-02-10 18:42', cb_postType = 1, cb_postTitle = '[源码解析] 模型并行分布式训练 Megatron (4) --- 如何设置各种并行';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-豆包')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201072501456-2052907165.jpg" onload="countCreativeImpressions('C1-字节-豆包')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDrjjXbghP2tz563j1juagvPIksZVx7IUiT_WoIYtVbeAdPq6ukGtHAcm_8HeiMrIo0lJSpHo1_ZTkfs0gWzy3uR8z1IvU87nIlATurRe_x7yo3al6yeanzRODDYNbtoaBU" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>

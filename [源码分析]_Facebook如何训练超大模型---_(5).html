@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="zh-cn">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="origin-when-cross-origin" />
+    <meta name="keywords" content="001_机器学习,006_深度学习,011_分布式机器学习" />
+    <meta name="description" content="FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型，本文我们介绍 Activation recomputation 相关知识。" />
+    <meta property="og:description" content="FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型，本文我们介绍 Activation recomputation 相关知识。" />
+    <meta http-equiv="Cache-Control" content="no-transform" />
+    <meta http-equiv="Cache-Control" content="no-siteapp" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>[源码分析] Facebook如何训练超大模型--- (5) - 罗西的思考 - 博客园</title>
+    <link rel="icon" id="favicon" href="https://assets.cnblogs.com/favicon_v3_2.ico" type="image/x-icon" />
+    <link rel="canonical" href="https://www.cnblogs.com/rossiXYZ/p/15837992.html" />
+    
+    <link rel="stylesheet" href="/css/blog-common.min.css?v=3DArmf-Or-4qxFZkl3OdynS2Am4I6_pcIbQbRZRdGaM" />
+    
+
+    <link id="MainCss" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright.min.css?v=O5zHESxCF0tzyVg01nX06fLeohvC5JYxsLWE4NmQOMg" />
+        <link id="highlighter-theme-cnblogs" type="text/css" rel="stylesheet" href="/css/hljs/cnblogs.css?v=5J1NDtbnnIr2Rc2SdhEMlMxD4l9Eydj88B31E7_NhS4" />
+    
+    
+    <link id="mobile-style" media="only screen and (max-width: 767px)" type="text/css" rel="stylesheet" href="/skins/lessismoreright/bundle-lessismoreright-mobile.min.css?v=Uw1Hg7i9RFPazLAd0cWltL-cniUkUgHHPLh7ZV9ZL9o" />
+    
+    <link type="application/rss+xml" rel="alternate" href="https://www.cnblogs.com/rossiXYZ/rss" />
+    <link type="application/rsd+xml" rel="EditURI" href="https://www.cnblogs.com/rossiXYZ/rsd.xml" />
+    <link type="application/wlwmanifest+xml" rel="wlwmanifest" href="https://www.cnblogs.com/rossiXYZ/wlwmanifest.xml" />
+    
+    <script type="application/ld&#x2B;json">
+    {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "@id": "https://www.cnblogs.com/rossiXYZ/p/15837992.html",
+      "headline": "[源码分析] Facebook如何训练超大模型--- (5)",
+      "description": "[源码分析] Facebook如何训练超大模型 (5) 0x00 摘要 我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。而FSDP（Fully Sharded Data",
+      "image": [
+        
+      ],
+      "author": {
+        "@type": "Person",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "url": "https://www.cnblogs.com/rossiXYZ/"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "@id": "https://www.cnblogs.com/",
+        "name": "博客园",
+        "url": "https://www.cnblogs.com/"
+      },
+      "datePublished": "2022-01-26T08:47:00.0000000&#x2B;08:00",
+      "dateModified": "2022-01-26T08:47:00.0000000&#x2B;08:00",
+      "wordCount": "34258",
+      "isPartOf": {
+        "@type": "Blog",
+        "@id": "https://www.cnblogs.com/rossiXYZ/",
+        "name": "罗西的思考",
+        "publisher": {
+          "@type": "Organization",
+          "@id": "https://www.cnblogs.com/",
+          "name": "博客园"
+        }
+      }
+    }
+    </script>
+
+    <script>
+        var currentBlogId = 556264;
+        var currentBlogApp = 'rossiXYZ';
+        var isLogined = false;
+        var isBlogOwner = false;
+        var skinName = 'LessIsMoreRight';
+        var visitorUserId = '';
+        var hasCustomScript = false;
+        window.cb_enable_mathjax = true;
+        window.mathEngine = 0;
+        window.codeHighlightEngine = 1;
+        window.enableCodeLineNumber = false;
+        window.codeHighlightTheme = 'cnblogs';
+        window.darkModeCodeHighlightTheme = 'vs2015';
+        window.isDarkCodeHighlightTheme = false;
+        window.isDarkModeCodeHighlightThemeDark = true;
+        window.isDisableCodeHighlighter = false;
+        window.enableCodeThemeTypeFollowSystem = false;
+        window.enableMacStyleCodeBlock = false;
+    </script>
+        <script>
+            window.currentPostId = 15837992;
+            window.currentPostDateAdded = '2022-01-26 08:47';
+        </script>
+    <script src="https://assets.cnblogs.com/scripts/jquery-3.3.1.min.js"></script>
+    <script src="https://cdn-www.cnblogs.com/js/blog-common.min.js?v=wZ-j9lgqsnaTqSE7AdWd3J3j9ENiZHPW0sel6vKY_Mo"></script>
+    
+</head>
+<body class="skin-lessismoreright has-navbar mathjax2">
+    <a name="top"></a>
+        <div id="imagebar" class="imagebar-mobile imagebar-text-mobile formobile">
+                <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" onclick="countCreativeClicks('M2-字节-豆包')" rel="nofollow">
+                    <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201073014811-1847930772.jpg" alt="" onload="countCreativeImpressionsOnMobile('M2-字节-豆包')" />
+                    <span id="m2_impression" style="display:none"></span>
+                </a>
+        </div>
+    <div id="top_nav" class="navbar forpc">
+        <nav id="nav_main" class="navbar-main">
+            <ul id="nav_left" class="navbar-list navbar-left">
+                <li class="navbar-branding">                    
+                    <a href="https://www.cnblogs.com/" title="开发者的网上家园" role="banner">
+                        <img src="//assets.cnblogs.com/logo.svg" alt="博客园logo" />
+                    </a>
+                </li>               
+                <li><a href="https://cnblogs.vip/">会员</a></li>
+                <li><a href="https://cnblogs.vip/store">周边</a></li>
+                <li><a href="https://news.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-news')">新闻</a></li>
+                <li><a href="https://q.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-q')">博问</a></li>
+                <li><a href="https://ing.cnblogs.com/" onclick="countClicks('nav', 'skin-navbar-ing')">闪存</a></li>
+                <li><a href="https://www.cnblogs.com/cmt/p/18341478">赞助商</a></li>
+                <li><a href="https://chat2db-ai.com/" target="_blank" onclick="countClicks('nav', 'skin-navbar-chat2db')">Chat2DB</a></li>
+            </ul>
+            <ul id="nav_right" class="navbar-list navbar-right">
+                <li>
+                    <form id="zzk_search" class="navbar-search dropdown" action="https://zzk.cnblogs.com/s" method="get" role="search">
+                        <input name="w" id="zzk_search_input" placeholder="代码改变世界" type="search" tabindex="3" autocomplete="off" />
+                        <button id="zzk_search_button" onclick="window.navbarSearchManager.triggerActiveOption()">
+                            <img id="search_icon" class="focus-hidden" src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                            <img class="hidden focus-visible" src="//assets.cnblogs.com/icons/enter.svg" alt="搜索" />
+                        </button>
+                        <ul id="navbar_search_options" class="dropdown-menu quick-search-menu">
+                            <li tabindex="0" class="active" onclick="zzkSearch(event, document.getElementById('zzk_search_input').value)">
+                                <div class="keyword-wrapper">
+                                    <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                    <div class="keyword"></div>
+                                </div>
+                                <span class="search-area">所有博客</span>
+                            </li>
+                                    <li tabindex="1" onclick="zzkBlogSearch(event, 'rossiXYZ', document.getElementById('zzk_search_input').value)">
+                                        <div class="keyword-wrapper">
+                                            <img src="//assets.cnblogs.com/icons/search.svg" alt="搜索" />
+                                            <div class="keyword"></div>
+                                        </div>
+                                        <span class="search-area">当前博客</span>
+                                    </li>
+                        </ul>
+                    </form>
+                </li>
+                <li id="navbar_login_status" class="navbar-list">
+                    <a class="navbar-user-info navbar-blog" href="https://i.cnblogs.com/EditPosts.aspx?opt=1" alt="写随笔" title="写随笔">
+                        <img id="new_post_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/newpost.svg" alt="写随笔" />
+                    </a>
+                    <a id="navblog-myblog-icon" class="navbar-user-info navbar-blog" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx" alt="我的博客" title="我的博客">
+                        <img id="myblog_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/myblog.svg" alt="我的博客" />
+                    </a>
+                    <a class="navbar-user-info navbar-message navbar-icon-wrapper" href="https://msg.cnblogs.com/" alt="短消息" title="短消息">
+                        <img id="msg_icon" class="navbar-icon" src="//assets.cnblogs.com/icons/message.svg" alt="短消息" />
+                        <span id="msg_count" style="display: none"></span>
+                    </a>
+                    <a id="navbar_lite_mode_indicator" data-current-page="blog" style="display: none" href="javascript:void(0)" alt="简洁模式" title="简洁模式启用，您在访问他人博客时会使用简洁款皮肤展示">
+                        <img class="navbar-icon" src="//assets.cnblogs.com/icons/lite-mode-on.svg" alt="简洁模式" />
+                    </a>
+                    <div id="user_info" class="navbar-user-info dropdown">
+                        <a class="dropdown-button" href="https://home.cnblogs.com/">
+                            <img id="user_icon" class="navbar-avatar" src="//assets.cnblogs.com/icons/avatar-default.svg" alt="用户头像" />
+                        </a>
+                        <div class="dropdown-menu">
+                            <a id="navblog-myblog-text" href="https://passport.cnblogs.com/GetBlogApplyStatus.aspx">我的博客</a>
+                            <a href="https://home.cnblogs.com/">我的园子</a>
+                            <a href="https://account.cnblogs.com/settings/account">账号设置</a>
+                            <a href="https://vip.cnblogs.com/my">会员中心</a>
+                            <a href="javascript:void(0)" id="navbar_lite_mode_toggle" title="简洁模式会使用简洁款皮肤显示所有博客">
+    简洁模式 <span id="navbar_lite_mode_spinner" class="hide">...</span>
+</a>
+
+                            <a href="javascript:void(0)" onclick="account.logout();">退出登录</a>
+                        </div>
+                    </div>
+                    <a class="navbar-anonymous" href="https://account.cnblogs.com/signup">注册</a>
+                    <a class="navbar-anonymous" href="javascript:void(0);" onclick="account.login()">登录</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+
+    <div id="page_begin_html">
+        
+
+    </div>
+
+    <div id="home">
+    <div id="header">
+        <div id="blogTitle">
+            <div class="title"><a id="Header1_HeaderTitle" class="headermaintitle HeaderMainTitle" href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>
+</div>
+<div class="subtitle">一手伸向技术，一手伸向生活</div>
+
+        </div>
+        <div id="navigator">
+            
+<ul id="navList">
+    <li id="nav_sitehome"><a id="blog_nav_sitehome" class="menu" href="https://www.cnblogs.com/">
+博客园</a>
+</li>
+    <li id="nav_myhome">
+<a id="blog_nav_myhome" class="menu" href="https://www.cnblogs.com/rossiXYZ/">
+首页</a>
+</li>
+    <li id="nav_newpost">
+
+<a id="blog_nav_newpost" class="menu" href="https://i.cnblogs.com/EditPosts.aspx?opt=1">
+新随笔</a>
+</li>
+    <li id="nav_contact">
+<a id="blog_nav_contact" class="menu" href="https://msg.cnblogs.com/send/%E7%BD%97%E8%A5%BF%E7%9A%84%E6%80%9D%E8%80%83">
+联系</a></li>
+    <li id="nav_rss">
+<a id="blog_nav_rss" class="menu" href="javascript:void(0)" data-rss="https://www.cnblogs.com/rossiXYZ/rss/">
+订阅</a></li>
+    <li id="nav_admin">
+<a id="blog_nav_admin" class="menu" href="https://i.cnblogs.com/">
+管理</a>
+</li>
+</ul>
+
+            <div class="blogStats">
+                <div id="blog_stats_place_holder"><script>loadBlogStats();</script></div>
+            </div>
+        </div>
+    </div>
+    <div id="main">
+        <div id="mainContent">
+            <div class="forFlow">
+                <div id="post_detail">
+    <div id="topics">
+        <div class="post">
+            <h1 class="postTitle">
+                <a id="cb_post_title_url" class="postTitle2 vertical-middle" href="https://www.cnblogs.com/rossiXYZ/p/15837992.html" title="发布于 2022-01-26 08:47">
+    <span role="heading" aria-level="2">[源码分析] Facebook如何训练超大模型--- (5)</span>
+    
+
+</a>
+
+            </h1>
+            <div class="clear"></div>
+            <div class="postBody">
+                    <div id="cnblogs_post_description" style="display: none">
+        
+        FSDP是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，目标是训练超大规模模型，本文我们介绍 Activation recomputation 相关知识。
+    </div>
+<div id="cnblogs_post_body" class="blogpost-body cnblogs-markdown">
+<h1 id="源码分析-facebook如何训练超大模型----5">[源码分析] Facebook如何训练超大模型--- (5)</h1>
+<p></p><div class="toc"><div class="toc-container-header">目录</div><ul><li><a href="#源码分析-facebook如何训练超大模型----5" rel="noopener nofollow">[源码分析] Facebook如何训练超大模型--- (5)</a><ul><li><a href="#0x00-摘要" rel="noopener nofollow">0x00 摘要</a></li><li><a href="#0x01-背景" rel="noopener nofollow">0x01 背景</a></li><li><a href="#0x02-思路" rel="noopener nofollow">0x02 思路</a><ul><li><a href="#21-学习建议" rel="noopener nofollow">2.1 学习建议</a></li><li><a href="#22-具体思路" rel="noopener nofollow">2.2 具体思路</a></li><li><a href="#23-最佳实践" rel="noopener nofollow">2.3 最佳实践</a></li></ul></li><li><a href="#0x03-具体实现" rel="noopener nofollow">0x03 具体实现</a><ul><li><a href="#31-wrapper" rel="noopener nofollow">3.1 Wrapper</a></li><li><a href="#32-如何使用" rel="noopener nofollow">3.2 如何使用</a></li><li><a href="#32-_checkpointed_forward" rel="noopener nofollow">3.2 _checkpointed_forward</a><ul><li><a href="#321-处理输入" rel="noopener nofollow">3.2.1 处理输入</a></li><li><a href="#322-非张量输出" rel="noopener nofollow">3.2.2 非张量输出</a><ul><li><a href="#3221-压缩非张量" rel="noopener nofollow">3.2.2.1 压缩非张量</a></li><li><a href="#3222-解压非张量" rel="noopener nofollow">3.2.2.2 解压非张量</a></li></ul></li></ul></li><li><a href="#33-checkpointfunction" rel="noopener nofollow">3.3 CheckpointFunction</a><ul><li><a href="#331-前向传播" rel="noopener nofollow">3.3.1 前向传播</a></li><li><a href="#332-后向传播" rel="noopener nofollow">3.3.2 后向传播</a></li></ul></li></ul></li><li><a href="#0x04-offloadfunction" rel="noopener nofollow">0x04 OffloadFunction</a><ul><li><a href="#41-前向传播" rel="noopener nofollow">4.1 前向传播</a></li><li><a href="#42-后向传播" rel="noopener nofollow">4.2 后向传播</a><ul><li><a href="#421-no_grad" rel="noopener nofollow">4.2.1 no_grad</a></li><li><a href="#422-chunk" rel="noopener nofollow">4.2.2 chunk</a></li><li><a href="#423-反向传播" rel="noopener nofollow">4.2.3 反向传播</a></li></ul></li></ul></li><li><a href="#0xff" rel="noopener nofollow">0xFF</a></li></ul></li></ul></div><p></p>
+<h2 id="0x00-摘要">0x00 摘要</h2>
+<p>我们在前文介绍过，微软 ZeRO 可以对一个万亿参数模型可以使用 8 路模型并行、64 路管道并行和 8 路数据并行在 4,096 个 NVIDIA A100 GPU 上进行扩展。而FSDP（Fully Sharded Data Parallel）是Facebook 深度借鉴微软ZeRO之后提出的PyTorch DDP升级版本，可以认为是对标微软 ZeRO，其本质是 parameter sharding。Parameter sharding 就是把模型参数等切分到各个GPU之上。我们会以 Google，微软和 Facebook 的论文，博客以及代码来进行学习分析。</p>
+<p>之前文章之中我们谈到了FSDP支持混合精度训练，本篇来看看 Activation recomputation。</p>
+<p>本系列其他文章如下：</p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15782054.html" target="_blank">源码解析] PyTorch 分布式之 ZeroRedundancyOptimizer</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15785669.html" target="_blank">论文翻译] 分布式训练 Parameter sharding 之 ZeRO</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15795044.html" target="_blank">论文翻译] 分布式训练 Parameter Sharding 之 Google Weight Sharding</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15815013.html" target="_blank">源码分析] Facebook如何训练超大模型---(1)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15819817.html" target="_blank">源码分析] Facebook如何训练超大模型 --- (2)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15824699.html" target="_blank">源码分析] Facebook如何训练超大模型 --- (3)</a></p>
+<p>[<a href="https://www.cnblogs.com/rossiXYZ/p/15837845.html" target="_blank">源码分析] Facebook如何训练超大模型---(4)</a></p>
+<h2 id="0x01-背景">0x01 背景</h2>
+<p>激活重新计算（Activation recomputation），也称“激活检查点（activation checkpointing）”或“梯度检查点（gradient checkpointing）”（Chen et al，2016 <a href="https://arvix.org/abs/1604.06174%EF%BC%89%EF%BC%8C%E5%85%B6%E6%80%9D%E8%B7%AF%E6%98%AF%E7%94%A8%E6%97%B6%E9%97%B4%E6%8D%A2%E7%A9%BA%E9%97%B4%EF%BC%8C%E5%8D%B3%EF%BC%8C%E7%89%BA%E7%89%B2%E8%AE%A1%E7%AE%97%E6%97%B6%E9%97%B4%E6%9D%A5%E6%8D%A2%E5%8F%96%E5%86%85%E5%AD%98%E7%A9%BA%E9%97%B4%E3%80%82%E5%85%B6%E5%87%8F%E5%B0%91%E4%BA%86%E6%B7%B1%E5%BA%A6%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E8%AE%AD%E7%BB%83%E5%B1%82%E7%9A%84%E5%86%85%E5%AD%98%E5%BC%80%E9%94%80%EF%BC%8C%E4%BB%A3%E4%BB%B7%E6%98%AF%E6%AF%8F%E4%B8%AAbatch%E4%BC%9A%E6%B6%88%E8%80%97%E9%A2%9D%E5%A4%96%E7%9A%84%E5%89%8D%E5%90%91%E4%BC%A0%E6%92%AD%E8%AE%A1%E7%AE%97%E3%80%82" target="_blank" rel="noopener nofollow">https://arvix.org/abs/1604.06174），其思路是用时间换空间，即，牺牲计算时间来换取内存空间。其减少了深度神经网络训练层的内存开销，代价是每个batch会消耗额外的前向传播计算。</a></p>
+<p>比方说，该方法将m层网络平均划分为d个分区，只保存分区边界的激活，并在workers之间交换这些激活。因为后向传播之中依然需要分区内层间激活值（Intermediate activations at intra-partition layers）来计算梯度，所以在后向传播过程中会在分区内部重新计算激活。</p>
+<p>下图为论文之中的示意图。</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220124003804401-121889389.png" alt="" loading="lazy"></p>
+<p>我们在之前文章之中介绍过重计算 [<a href="https://www.cnblogs.com/rossiXYZ/p/15172960.html" target="_blank">源码解析] 深度学习流水线并行 GPipe(3) ----重计算</a>。本文会看看 FairScale 是如何对其进行进一步封装和改进。</p>
+<h2 id="0x02-思路">0x02 思路</h2>
+<h3 id="21-学习建议">2.1 学习建议</h3>
+<p>在看思路之前，我们先来讲讲如何更好的分析一个开源框架或者说如何学习源码。个人的意见是按照：<strong>论文 --&gt; 文档 --&gt; 用户手册 --&gt; 注释 --&gt; 源码</strong> 这个顺序来学习。</p>
+<p>为什么按照这个顺序？因为这个顺序是：</p>
+<ul>
+<li>从抽象逻辑（或者说是体系架构）到具体细节。
+<ul>
+<li>论文是把作者的思想提炼，逻辑化，体系化的结果，文档次之。而且重读经典论文，其收获是多维度的。</li>
+<li>手册则会从使用或者注意点方面帮你完成对这个框架整体的认识。</li>
+<li>源码则给你呈现了大量的细节。</li>
+</ul>
+</li>
+<li>从人的思想到机器的思想。
+<ul>
+<li>注释是作者给阅读者看的，代码是作者给机器看的。</li>
+<li>注释会告诉你为什么这样实现（Why），代码告诉你怎么实现（How）。</li>
+</ul>
+</li>
+</ul>
+<p>对于我们来说，应该首先寻求一种思维的改变，知识框架的更新与整理，然后才是用代码来分析验证（毕竟纸上得来终觉浅）。当然，很多时候我们只有源码，那么就只能从源码之中根据细节来探寻，重建作者的思路，提炼其精华，争取和作者达到一个跨越空间和时间的共鸣，共鸣越多，你就越接近作者了 <sup>_</sup>。</p>
+<h3 id="22-具体思路">2.2 具体思路</h3>
+<p>我们接下来就看看源码文档之中的思路介绍。</p>
+<p>激活检查点是一种用于减少训练期间GPU内存使用的技术。具体做法是：</p>
+<ul>
+<li>在向前传播过程中避免存储中间激活张量。</li>
+<li>在后向传播过程中依靠跟踪原始输入来重新进行前向传播计算。</li>
+</ul>
+<p>其结果是：以略有增加（约33%）的计算成本来减少了存储大型激活张量的必要，因此允许我们增加batch size，从而增加模型的净吞吐量。</p>
+<p>激活检查点是通过重载  <code>torch.autograd.Function</code> 来完成的。</p>
+<ul>
+<li>通过在前向函数之中使用no_grad，我们可以在很长一段时间内（即直到反向传播开始）避免前向计算图的创建和中间激活张量的具化（materialization）。</li>
+<li>在向后传播期间内，会先再次执行向前传播，然后执行向后传播。
+<ul>
+<li>向前传播的输入已经保存在上下文对象之中，所以在向后传播之中可以通过该上下文对象拿到原始输入。</li>
+<li>因为在某些情况下（Dropout layers）会用到，所以还保存了前向和后向传播的Random Number Generator(RNG) 状态。</li>
+</ul>
+</li>
+</ul>
+<p>上述功能在<code>torch.utils.checkpoint.checkpoint_wrapper</code>  之中可以看到其具体实现，可以在前向传播之中使用这个API来对模块进行封装。FairScale中的包装器提供的功能比PyTorch API提供的功能更多，比如用户可以使用 <code>fairscale.nn.checkpoint.checkpoint_wrapper</code> 来包装一个 <code>nn.Module</code>，这样就可以在正向传递中处理kwargs，将中间激活卸载（offload）到CPU，并处理从前向函数返回的非张量输出。</p>
+<h3 id="23-最佳实践">2.3 最佳实践</h3>
+<p>我们接下来看看  <code>fairscale.nn.checkpoint.checkpoint_wrapper</code> 的最佳实践。</p>
+<ul>
+<li>内存节省效果取决于模型和checkpoint wrapping如何进行分段。即，内存节省收益取决于层激活的内存占用情况。</li>
+<li>使用BatchNormalization时，您可能需要冻结统计数据的计算，因为在这种情况下会运行两次前向传播。</li>
+<li>确保输入张量的<code>requires_grad</code> 属性设置为True。通过将输入张量的<code>requires_grad</code> 属性设置为True，我们确保输入可以传播到输出，并触发 <code>backward</code> 函数。</li>
+</ul>
+<h2 id="0x03-具体实现">0x03 具体实现</h2>
+<h3 id="31-wrapper">3.1 Wrapper</h3>
+<p>checkpoint_wrapper 是具体的wrapper，其内部就是调用了其他函数。但是我们发现其注释可以让我们进一步学习，所以翻译如下：</p>
+<p>checkpoint_wrapper 是执行激活检查点的包装器，其比PyTorch版本更加用户友好，具备如下特点：</p>
+<ul>
+<li>
+<p>包装一个nn.Module，以便所有后续调用都将使用checkpointing。</p>
+</li>
+<li>
+<p>处理前向过程中的关键字参数（keyword arguments）。</p>
+</li>
+<li>
+<p>处理来自正向过程中的非张量输出。</p>
+</li>
+<li>
+<p>支持将激活卸载到CPU。</p>
+</li>
+</ul>
+<p>为了更好的了解checkpointing和"offload_to_cpu"带来的好处，我们将激活分为两种类型：</p>
+<ul>
+<li>内部激活。其依靠 activation checkpointing 来保存。</li>
+<li>外部激活，也就是检查点模块。其依靠offload_to_cpu来保存。</li>
+</ul>
+<p>就GPU内存节约效果而言：</p>
+<ul>
+<li>
+<p>当内部激活很大而外部激活很小时，检查点会带来很大收获，offload_to_cpu可能只带来很小的收益。</p>
+</li>
+<li>
+<p>当内部激活小而外部激活很大时，检查点帮助很小，offload_to_cpu会带来很大收益。</p>
+</li>
+<li>
+<p>当内部激活和外部激活都很大时，检查点和offload_to_cpu带来的益处是叠加的。</p>
+</li>
+</ul>
+<p>另外，第一层和最后一层不太可能受益于offload_to_cpu标志，因为：</p>
+<ul>
+<li>第一层的输入通常有其他引用，因此GPU内存不会被释放；</li>
+<li>最后一层的输入会立即被向后传播使用，不会节省内存。</li>
+</ul>
+<pre><code class="language-python">def checkpoint_wrapper(
+    module: nn.Module, offload_to_cpu: bool = False, maintain_forward_counter: bool = False
+) -&gt; nn.Module:
+    """
+    A friendlier wrapper for performing activation checkpointing.
+
+    Compared to the PyTorch version, this version:
+
+        - wraps an nn.Module, so that all subsequent calls will use checkpointing
+        - handles keyword arguments in the forward
+        - handles non-Tensor outputs from the forward
+        - supports offloading activations to CPU
+
+    Usage::
+
+        checkpointed_module = checkpoint_wrapper(my_module, offload_to_cpu=True)
+        a, b = checkpointed_module(x, y=3, z=torch.Tensor([1]))
+
+    To understand the benefits of checkpointing and the `offload_to_cpu` flag,
+    let's divide activations into 2 types: inner activations and outer
+    activations w.r.t. the checkpointed modules. The inner ones are saved
+    by activation checkpointing, the outer ones are saved by offload_to_cpu.
+
+    In terms of GPU memory savings:
+
+        - When inner ones are large in size and outer ones are small,
+          checkpointing helps a lot, offload_to_cpu may help a little.
+        - When inner ones are small and outer ones are large,
+          checkpointing helps little, offload_to_cpu helps a lot.
+        - When both inner and outer are large, both help and the
+          benefit is additive.
+
+    ..Note::
+
+        The first and last layers are not likely to benefit from the `offload_to_cpu` flag
+        because (1) there are typically other references to the first layer's input, so
+        the GPU memory won't be freed; (2) the input to the last layer is immediately
+        used by the backward pass and won't result in memory savings.
+
+    Args:
+        module (nn.Module):
+            The module to be wrapped
+        offload_to_cpu (bool):
+            Whether to offload activations to CPU.
+        maintain_forward_counter (bool):
+            If True, maintain a forward counter per inner module. The counter will first
+            increases in forward calls of outer forward pass and then decreases in the
+            forward calls of outer backward pass. It is used by FullyShardedDataParallel.
+
+    Returns:
+        (nn.Module):
+            Wrapped module
+    """
+    # Patch the batchnorm layers in case there are any in this module.
+    patch_batchnorm(module)
+
+    if maintain_forward_counter:
+        init_counter(module)
+
+    # The use of weakref here is to prevent creating a ref cycle: m -&gt; m.forward -&gt; m.
+    # When such cycle exists, gc won't collect the module when the module is freed.
+    # That causes GPU memory to be leaked. See the unit test for how we catch that.
+    #
+    # We prefer this over a class wrapper since the class wrapper would have to
+    # proxy a lot of fields and methods.
+    module.forward = functools.partial(  # type: ignore
+        _checkpointed_forward, type(module).forward, weakref.ref(module), offload_to_cpu
+    )
+    return module # 包装一个nn.Module，以便所有后续调用都将使用checkpointing
+</code></pre>
+<h3 id="32-如何使用">3.2 如何使用</h3>
+<p>我们从源码之中找出一些代码，大家可以看看。</p>
+<pre><code class="language-python">self.layers = nn.Sequential(
+    nn.Sequential(nn.Linear(4, 4), nn.Linear(4, 4), nn.Linear(4, 8)),
+    nn.Sequential(nn.Linear(8, 4), nn.Linear(4, 4), nn.Linear(4, 4)),
+    nn.Sequential(nn.Linear(4, 6), nn.Linear(6, 8), nn.Linear(8, 2)),
+)
+
+if enable_checkpoint:
+    for i, layer in enumerate(self.layers):
+        # Only middle layer needs to have offloading
+        self.layers[i] = checkpoint_wrapper(layer, cpu_offload if i == 1 else False)
+</code></pre>
+<h3 id="32-_checkpointed_forward">3.2 _checkpointed_forward</h3>
+<p>前面提到对比PyTorch版本，FairScale有几点益处，此处就对应了以下有下划线的两点：</p>
+<ul>
+<li>
+<p>包装一个nn.Module，以便所有后续调用都将使用checkpointing。</p>
+</li>
+<li>
+<p><u>处理前向过程中的关键字参数（keyword arguments）。</u></p>
+</li>
+<li>
+<p><u>处理来自正向过程中的非张量输出。</u></p>
+</li>
+<li>
+<p>支持将激活卸载到CPU。</p>
+</li>
+</ul>
+<p>代码逻辑如下：</p>
+<ul>
+<li>如果禁用了disabled，则直接使用 <code>.forward()</code> 。这样做还可以确保内部fwd counter在前向过程中不会增加，但是这在eval过程中会是一个问题，因为不会有相应的后向过程来减少fwd counter。</li>
+<li>因为后向传播必须为每个输入参数返回一个梯度（或None），所以PyTorch中的Autograd函数在带有位置信息参数下工作最佳。将关键字参数扁平化可以让这种处理更加方便。</li>
+<li>调用 CheckpointFunction 完成 activation checkpointing。这里需要注意的是：当original_forward的输入为非张量（即一个元组）时，因此 CheckpointFunction <u>传入了一个带有grad的 dummy tensor 参数</u>来确保向后传播被调用。
+<ul>
+<li>在输入为元组类型的情况下，即便设置张量的requires_grad标志也不会触发后向传播。</li>
+<li>使用这个 dummy tensor 可以避免要求用户设置输入张量的requires_grad标志。</li>
+</ul>
+</li>
+<li>处理来自正向过程中的输出为tuple，就是把张量和非张量打包在一起。</li>
+</ul>
+<p>具体代码如下：</p>
+<pre><code class="language-python">def _checkpointed_forward(
+    original_forward: Any, weak_self: Any, offload_to_cpu: bool, *args: Any, **kwargs: Any
+) -&gt; Any:
+    module = weak_self()
+
+    # If gradients are disabled, just use original `.forward()` method directly.
+    # Doing so also ensures the internal fwd counter is not incremented in the forward pass,
+    # which would be an issue during eval since there wouldn't be a corresponding backward pass
+    # to decrement the fwd counter.
+    # See https://github.com/facebookresearch/fairscale/pull/709.
+    if not torch.is_grad_enabled():
+        return original_forward(module, *args, **kwargs)
+
+    # Autograd Functions in PyTorch work best with positional args, since
+    # the backward must return gradients (or None) for every input argument.
+    # We can flatten keyword arguments to make this easier.
+    args = (module,) + args
+    kwarg_keys, flat_args = pack_kwargs(*args, **kwargs) # 处理输入
+    parent_ctx_dict: Dict[str, Any] = {
+        "offload": offload_to_cpu,
+    }
+    # Dummy tensor with grad is used to ensure the backward pass is called. This is needed
+    # when original_forward's input are non-tensor (i.e. a tuple). Using this dummy tensor
+    # avoids requiring users to set their input tensors's requires_grad flag. In the case
+    # of tuple type inputs, setting the flag won't even trigger the backward pass.
+    output = CheckpointFunction.apply(
+        torch.tensor([], requires_grad=True), original_forward, parent_ctx_dict, kwarg_keys, *flat_args
+    )
+    
+    # 处理非张量输出
+    if not isinstance(output, torch.Tensor):
+        # parent_ctx_dict["packed_non_tensor_outputs"] 是 CheckpointFunction 返回的
+        packed_non_tensor_outputs = parent_ctx_dict["packed_non_tensor_outputs"]
+        if packed_non_tensor_outputs:
+            # 统一处理成tuple
+            output = unpack_non_tensors(output, packed_non_tensor_outputs) # 处理输出
+    return output
+</code></pre>
+<h4 id="321-处理输入">3.2.1 处理输入</h4>
+<p><u>在处理前向过程中的关键字参数（keyword arguments）之中</u>，使用了pack_kwargs，其作用就是把参数的key，value整理成为两个list，具体可以参见示例。</p>
+<pre><code class="language-python">def pack_kwargs(*args: Any, **kwargs: Any) -&gt; Tuple[Tuple[str, ...], Tuple[Any, ...]]:
+    """
+    Turn argument list into separate key list and value list (unpack_kwargs does the opposite)
+    Usage::
+
+        kwarg_keys, flat_args = pack_kwargs(1, 2, a=3, b=4)
+        assert kwarg_keys == ("a", "b")
+        assert flat_args == (1, 2, 3, 4)
+        args, kwargs = unpack_kwargs(kwarg_keys, flat_args)
+        assert args == (1, 2)
+        assert kwargs == {"a": 3, "b": 4}
+    """
+    kwarg_keys: List[str] = []
+    flat_args: List[Any] = list(args)
+    for k, v in kwargs.items():
+        kwarg_keys.append(k)
+        flat_args.append(v)
+    return tuple(kwarg_keys), tuple(flat_args)
+</code></pre>
+<h4 id="322-非张量输出">3.2.2 非张量输出</h4>
+<h5 id="3221-压缩非张量">3.2.2.1 压缩非张量</h5>
+<p>把一个tuple分割为一个张量列表和后续重建所需要的信息。</p>
+<pre><code class="language-python">def split_non_tensors(
+    mixed: Union[torch.Tensor, Tuple[Any, ...]]
+) -&gt; Tuple[Tuple[torch.Tensor, ...], Optional[Dict[str, List[Any]]]]:
+    """
+    Split a tuple into a list of tensors and the rest with information
+    for later reconstruction.
+
+    Usage::
+
+        x = torch.Tensor([1])
+        y = torch.Tensor([2])
+        tensors, packed_non_tensors = split_non_tensors((x, y, None, 3))
+        assert tensors == (x, y)
+        assert packed_non_tensors == {
+            "is_tensor": [True, True, False, False],
+            "objects": [None, 3],
+        }
+        recon = unpack_non_tensors(tensors, packed_non_tensors)
+        assert recon == (x, y, None, 3)
+    """
+    if isinstance(mixed, torch.Tensor):
+        return (mixed,), None
+    tensors: List[torch.Tensor] = []
+    packed_non_tensors: Dict[str, List[Any]] = {"is_tensor": [], "objects": []}
+    for o in mixed:
+        if isinstance(o, torch.Tensor):
+            packed_non_tensors["is_tensor"].append(True)
+            tensors.append(o)
+        else:
+            packed_non_tensors["is_tensor"].append(False)
+            packed_non_tensors["objects"].append(o)
+    return tuple(tensors), packed_non_tensors
+</code></pre>
+<h5 id="3222-解压非张量">3.2.2.2 解压非张量</h5>
+<p>unpack_non_tensors 用来把非张量列表恢复成tuple。</p>
+<pre><code class="language-python">def unpack_non_tensors(
+    tensors: Tuple[torch.Tensor, ...], packed_non_tensors: Optional[Dict[str, List[Any]]]
+) -&gt; Tuple[Any, ...]:
+    """See split_non_tensors."""
+    if packed_non_tensors is None:
+        return tensors
+    assert isinstance(packed_non_tensors, dict), type(packed_non_tensors)
+    mixed: List[Any] = []
+    is_tensor_list = packed_non_tensors["is_tensor"]
+    objects = packed_non_tensors["objects"]
+
+    obj_i = tnsr_i = 0
+    for is_tensor in is_tensor_list:
+        if is_tensor:
+            mixed.append(tensors[tnsr_i])
+            tnsr_i += 1
+        else:
+            mixed.append(objects[obj_i])
+            obj_i += 1
+    return tuple(mixed)
+</code></pre>
+<h3 id="33-checkpointfunction">3.3 CheckpointFunction</h3>
+<p>我们接下来分析 CheckpointFunction，就是具体 activation checkpointing 的业务函数。关于 PyTorch 的 CheckpointFunction 版本，可以参见 [<a href="https://www.cnblogs.com/rossiXYZ/p/15172960.html" target="_blank">源码解析] 深度学习流水线并行 GPipe(3) ----重计算</a>。</p>
+<p><u>这里对应了优点之中的：支持将激活卸载到CPU</u>。</p>
+<h4 id="331-前向传播">3.3.1 前向传播</h4>
+<p>其前向传播的逻辑如下：</p>
+<ul>
+<li>分割非张量参数列表，得到张量输入和非张量输入。
+<ul>
+<li>如果设置了"offload"，在上下文记录设备，梯度需求情况，并且把输入张量放到cpu上。</li>
+</ul>
+</li>
+<li>为后向传播保存输入。</li>
+<li>如果设置了activation checkpointing，则处理参数，进行前向计算。</li>
+<li>如果输出不是张量，因为Autograd Functions不喜欢非张量输出。我们可以拆分为非张量和张量输出，通过parent_ctx_dict引用返回前者，然后直接返回后者。</li>
+</ul>
+<pre><code class="language-python">class CheckpointFunction(torch.autograd.Function):
+    """Similar to the torch version, but support non-Tensor outputs.
+
+    The caller is expected to provide a dict (*parent_ctx_dict*) that will hold
+    the non-Tensor outputs. These should be combined with the Tensor *outputs*
+    by calling :func:`unpack_non_tensors`.
+    """
+
+    @staticmethod
+    def forward(  # type: ignore
+        ctx: Any,
+        dummy_tensor_requires_grad: torch.Tensor,
+        run_function: Any,
+        parent_ctx_dict: Dict[str, Any],
+        kwarg_keys: Tuple[str, ...],
+        *args: Any,
+        **kwargs: Any
+    ) -&gt; Any:
+        torch_checkpoint.check_backward_validity(args)
+
+        ctx.run_function = run_function # 在上下文之中存储前向传播函数
+        ctx.kwarg_keys = kwarg_keys
+        ctx.fwd_rng_state = get_rng_state() # 在上下文之中存储前向传播状态
+        ctx.had_autocast_in_fwd = is_autocast_enabled()
+
+        # 分割非张量参数列表，得到张量输入和非张量输入
+        tensor_inputs, packed_non_tensor_inputs = split_non_tensors(args) 
+        if parent_ctx_dict["offload"]:
+            # 在上下文记录设备，梯度需求情况，并且把输入张量放到cpu上
+            ctx.fwd_device = tuple(x.device for x in tensor_inputs) # 在上下文存储前向传播设备
+            ctx.grad_requirements = tuple(x.requires_grad for x in tensor_inputs)
+            tensor_inputs = tuple(x.to("cpu", non_blocking=True) for x in tensor_inputs)
+        else:
+            ctx.fwd_device, ctx.grad_requirements = None, None
+
+        # 为后向传播保存输入
+        ctx.save_for_backward(*tensor_inputs)
+        ctx.packed_non_tensor_inputs = packed_non_tensor_inputs
+
+        with torch.no_grad(), enable_checkpointing(): # 如果设置了activation checkpointing
+            unpacked_args, unpacked_kwargs = unpack_kwargs(kwarg_keys, args) # 处理参数
+            outputs = run_function(*unpacked_args, **unpacked_kwargs) # 前向计算
+            the_module = unpacked_args[0]
+            inc_counter(the_module)
+
+        if not isinstance(outputs, torch.Tensor): # 如果输出不是张量
+            # Autograd Functions don't like non-Tensor outputs. We can split the
+            # non-Tensor and Tensor outputs, returning the former by reference
+            # through *parent_ctx_dict* and returning the latter directly.
+            # Autograd Functions不喜欢非张量输出。我们可以拆分为非张量和张量输出，
+            # 通过parent_ctx_dict引用返回前者，然后直接返回后者。
+            outputs, packed_non_tensor_outputs = split_non_tensors(outputs)
+            parent_ctx_dict["packed_non_tensor_outputs"] = packed_non_tensor_outputs
+        return outputs
+
+
+</code></pre>
+<h4 id="332-后向传播">3.3.2 后向传播</h4>
+<p>后向传播逻辑如下：</p>
+<ul>
+<li>拿到存储在上下文的张量输入。</li>
+<li>如果设置了在设备上计算，则：
+<ul>
+<li>把 offlad 的张量再移到 GPU之上。</li>
+<li>找到需要计算的梯度。</li>
+</ul>
+</li>
+<li>处理非张量输入，最终和张量输入组合在一起。</li>
+<li>保存当前状态。</li>
+<li>从上下文加载前向传播时候的状态。</li>
+<li>重新做前向传播。</li>
+<li>处理前向传播输出。</li>
+<li>恢复后向传播的状态。</li>
+<li>从前向传播输出找到需要梯度的张量，在后向传播的输入之中找到对应的张量。</li>
+<li>进行后向传播。</li>
+<li>返回梯度。</li>
+</ul>
+<pre><code class="language-python">class CheckpointFunction(torch.autograd.Function):
+    """Similar to the torch version, but support non-Tensor outputs.
+
+    The caller is expected to provide a dict (*parent_ctx_dict*) that will hold
+    the non-Tensor outputs. These should be combined with the Tensor *outputs*
+    by calling :func:`unpack_non_tensors`.
+    """
+
+    @staticmethod
+    def backward(ctx: Any, *args: Any) -&gt; Tuple[Optional[Tensor], ...]:
+        if not torch.autograd._is_checkpoint_valid():
+            raise RuntimeError("Checkpointing is not compatible with .grad(), please use .backward() if possible")
+
+        # 拿到存储在上下文的张量输入
+        tensor_inputs: Tuple = ctx.saved_tensors
+        tensor_inputs = torch_checkpoint.detach_variable(tensor_inputs)
+        if ctx.fwd_device is not None: # 如果设置了在设备上计算
+            # 把 offload 的张量再移到 GPU之上
+            tensor_inputs = tuple(t.to(ctx.fwd_device[i], non_blocking=True) for i, t in enumerate(tensor_inputs))
+            for i, need_grad in enumerate(ctx.grad_requirements): # 找到需要计算的梯度
+                tensor_inputs[i].requires_grad = need_grad
+        # 处理非张量输入，最终和张量输入组合在一起        
+        inputs = unpack_non_tensors(tensor_inputs, ctx.packed_non_tensor_inputs)
+
+        # Store the current states.
+        bwd_rng_state = get_rng_state() # 拿到之前保存的当前状态
+
+        # Set the states to what it used to be before the forward pass.
+        set_rng_state(ctx.fwd_rng_state) # 从上下文加载前向传播时候的状态
+
+        with torch.enable_grad(), enable_recomputing(), autocast(ctx.had_autocast_in_fwd):
+            unpacked_args, unpacked_kwargs = unpack_kwargs(ctx.kwarg_keys, inputs)
+            outputs = ctx.run_function(*unpacked_args, **unpacked_kwargs) # 重新做前向传播
+            tensor_outputs, _ = split_non_tensors(outputs) # 处理前向传播输出
+            the_module = unpacked_args[0]
+            dec_counter(the_module)
+
+        # Set the states back to what it was at the start of this function.
+        set_rng_state(bwd_rng_state) # 恢复后向传播的状态
+
+        # Run backward() with only Tensors that require grad
+        outputs_with_grad = [] 
+        args_with_grad = []
+        # 从前向传播输出找到需要梯度的张量
+        for i in range(len(tensor_outputs)):
+            if tensor_outputs[i].requires_grad:
+                outputs_with_grad.append(tensor_outputs[i])
+                args_with_grad.append(args[i]) # 在后向传播的输入之中找到对应的张量
+        if len(outputs_with_grad) == 0:
+            raise RuntimeError("None of the outputs have requires_grad=True, " "this checkpoint() is not necessary")
+
+        # 进行后向传播     
+        torch.autograd.backward(outputs_with_grad, args_with_grad)
+
+        # 从inputs里面得到梯度
+        grads = tuple(inp.grad if isinstance(inp, torch.Tensor) else None for inp in inputs)
+        return (None, None, None, None) + grads # 返回梯度
+</code></pre>
+<p>我们整理逻辑如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220124003823306-157734264.jpg" alt="" loading="lazy"></p>
+<h2 id="0x04-offloadfunction">0x04 OffloadFunction</h2>
+<p>前文在 OffloadModel 的 forward 方法之中，如果设置了 _checkpoint_activation，则调用 OffloadFunction 把激活检查点卸载到CPU之上，直接返回。我们接下来看看 OffloadFunction 如何实现与activation相关的操作。</p>
+<p>此函数通过覆盖nn.Module的向前和向后传播，在分片边界启用中间激活的检查点。这样只保存分区边界的激活，并在workers之间交换这些激活。</p>
+<p><u>本节与上节的主要区别</u>是：</p>
+<ul>
+<li>CheckpointFunction<u>只是把输入张量在GPU和CPU之间移动，丢弃了内部激活</u>。</li>
+<li>OffloadFunction 把<strong>激活</strong>（没有丢弃）与<strong>模型</strong>都在在GPU和CPU之间移动，而且因为分区是一层或者多层layers，所以只是在worker之间交换这些分区边界的激活。</li>
+</ul>
+<h3 id="41-前向传播">4.1 前向传播</h3>
+<p>在FW过程中，它遍历每一个分区，针对每一个分区，删除前一个分片中的参数，并加载下一个分片的参数，然后进行这个分区的前向计算。FW过程中未构造任何计算图。这使我们能够卸载分片边界上的中间激活。</p>
+<p>这里有几点说明：</p>
+<ul>
+<li>model_instance.model_slices 是模型的分片，每个分片里面包含一个或者多个层。</li>
+<li>除了之后一个分区的激活，其余分区之间的激活都存在CPU之上。这里假设目标张量也位于执行计算的GPU上，那么对于最后一层计算来说，其输出激活也应该位于这个GPU之上。如果输出激活移动到CPU之上，反向传播就可能找不到其梯度函数了。</li>
+</ul>
+<p>具体代码如下：</p>
+<pre><code class="language-python">class OffloadFunction(torch.autograd.Function):
+    """
+     This Function enables checkpointing of intermediate activations at
+     shard boundaries by overriding the forward and backward pass of the nn.Module.
+
+     - In the FW pass, it drops parameters in the previous shard and
+     loads parameters for the next shard. No graph is constructed in the FW pass.
+     This enables us to offload intermediate activations present at the shard
+     boundaries.
+
+     - In the BW pass, it does the reverse. We run the forward pass using the
+     saved intermediate activations and calculate gradients as needed.
+     The trade-off is latency vs memory when using activation checkpointing.
+
+     - Follows heavily from https://pytorch.org/docs/stable/_modules/torch/utils/checkpoint.html#checkpoint.
+
+     NOTE: see https://pytorch.org/docs/stable/autograd.html#torch.autograd.Function
+     """
+
+    @staticmethod
+    @_conditional_amp_fwd_decorator  # type: ignore
+    def forward(ctx: Any, inputs: Any, dummy_input: Any, model_instance: Any) -&gt; Any:
+        inputs = inputs if isinstance(inputs, tuple) else (inputs,)
+
+        # 把后向传播所需要的信息存储在上下文。
+        ctx.inputs = inputs
+        ctx.model_instance = model_instance
+        # TODO(anj-s): We might need to store this for each boundary activation.
+        # Currently we assume all boundary activation inputs require
+        ctx.grad_requirements = tuple(x.requires_grad for x in inputs)
+        ctx.fwd_rng_state = torch.get_rng_state()
+
+        # List of input activations starting with the given input.
+        model_instance._activations = [inputs]
+        # Enumerate through layer shards and apply activations from the previous shard.
+        for index, layer_shard in enumerate(model_instance.model_slices): # 遍历模型的分区
+            with torch.autograd.profiler.record_function("fairscale.experimental.nn.offload:forward_load"):
+                # Bring in the current activations onto the device.
+                # 把当前激活拷贝到设备之上
+                model_instance._activations[index] = tuple([a.cuda() for a in list(model_instance._activations[index])])
+                # Bring in the current layer shard onto the device.
+                # 把当前层加载到设备之上
+                layer_shard.forward_load()
+
+            # Apply the FP and store the activations on the CPU.
+            inputs = model_instance._activations[index]
+            with torch.autograd.profiler.record_function("fairscale.experimental.nn.offload:no_grad_forward_pass"):
+                with torch.no_grad(): # 不会跟踪下面的梯度，只是计算激活
+                    output_list: List[Any] = []
+                    for given_input in inputs:
+                        given_input_list = torch.chunk(given_input, model_instance._num_microbatches)
+                        given_output_list = []
+                        for inputs in given_input_list:
+                            output = layer_shard(inputs) # 前向操作
+                            given_output_list.append(output)
+                        given_output = torch.cat(given_output_list).squeeze(-1)
+                        output_list.append(given_output)
+                    output = tuple(output_list) # 得到输出
+
+            output = output if isinstance(output, tuple) else (output,)
+            with torch.autograd.profiler.record_function("fairscale.experimental.nn.offload:forward_drop"):
+                # Move the activation used back for the curent shard back to the CPU.
+                # 把激活移动到CPU
+                model_instance._activations[index] = tuple([a.cpu() for a in list(model_instance._activations[index])])
+                # The newly computed activations remain on the GPU ready for the next shard computation.
+                model_instance._activations.append(output)
+                # Move the layer shard back to the CPU.
+                layer_shard.forward_drop() # 把层移动到CPU
+
+        # The last instance will lose the gradient function if we move it to the CPU.
+        # This is because all grad function are present on the device that ran the FW pass.
+        # The last activation remains on the GPU and is the return value of this function.
+        # Note that this assumes that the target is also on the GPU which is required for calculating
+        # the loss.
+        
+        result = model_instance._activations[-1] # 最后一层的激活
+        result = [r.cuda() for r in result] # 把最后一层的激活移动到设备上，其余的已经移动到CPU之上
+        for r in result:
+            r.requires_grad = True
+        return result[0] if len(result) == 1 else result
+</code></pre>
+<h3 id="42-后向传播">4.2 后向传播</h3>
+<p>在BW过程中，它执行相反的操作。我们使用保存的中间激活运行前向传播，并根据需要计算梯度。在使用激活检查点时，需要权衡延迟和内存。因为这里会用到几个PyTorch的内置方法，所以我们需要首先来看看其用法和原理。</p>
+<h4 id="421-no_grad">4.2.1 no_grad</h4>
+<p>torch.no_grad() 是一个上下文管理器，被 no_grad 包括起来的代码不会跟踪其梯度。我们用一个例子来看看。</p>
+<pre><code class="language-python">import torch
+
+x = torch.tensor([2.2], requires_grad=True)
+y = x * 3
+print(y)
+y.add_(2)
+print(y)
+
+with torch.no_grad():
+    y.div_(3)
+    print(y)
+</code></pre>
+<p>输出为：</p>
+<pre><code class="language-python">tensor([6.6000], grad_fn=&lt;MulBackward0&gt;) # 这里记录了梯度操作
+tensor([8.6000], grad_fn=&lt;AddBackward0&gt;) # add操作被跟踪
+tensor([2.8667], grad_fn=&lt;AddBackward0&gt;) # 用了no_grad，所以div没有被跟踪
+</code></pre>
+<h4 id="422-chunk">4.2.2 chunk</h4>
+<p><code>torch.chunk(tensor, chunk_num, dim)</code> 将张量按dimension（行或列）分割得到 chunk_num 个张量块，此函数将返回一个元组，比如下面例子。</p>
+<pre><code class="language-python">x = torch.Tensor([[1,2,3]])
+y = torch.Tensor([[4,5,6], [7,8,9], [10,11,12]])
+z = torch.cat((x,y), dim=0)
+print(z)
+print(z.size())
+c = torch.chunk(z,4,dim=0)
+print(c)
+print(len(c))
+</code></pre>
+<p>输出为：</p>
+<pre><code class="language-python"># cat之后的输出
+tensor([[ 1.,  2.,  3.],
+        [ 4.,  5.,  6.],
+        [ 7.,  8.,  9.],
+        [10., 11., 12.]])
+torch.Size([4, 3])
+
+# chunk之后的输出
+(tensor([[1., 2., 3.]]), tensor([[4., 5., 6.]]), tensor([[7., 8., 9.]]), tensor([[10., 11., 12.]]))
+4
+</code></pre>
+<h4 id="423-反向传播">4.2.3 反向传播</h4>
+<p>OffloadFunction 的反向传播如下，这里有个reverse操作需要注意。</p>
+<ul>
+<li>在代码初期，会把模型分片和激活进行reverse（注意，没有把原始分配和激活进行reverse，这里是reverse之后的结果返回，不影响原始数据），因为计算梯度是从后向前，所以把-1放到第一个位置，依次类推，这样可以方便使用backward_load和backward_drop。</li>
+<li>在代码最后，因为之前的reverse没有对 model_instance._activations 做修改，所以可以直接返回输入之中的梯度。</li>
+</ul>
+<p>具体代码如下：</p>
+<pre><code class="language-python">class OffloadFunction(torch.autograd.Function):
+
+    # Ignore the following function for code coverage since the backward pass
+    # is triggered by C++ code and cannot be calculated when overriding
+    # autograd.Function
+    @staticmethod
+    @_conditional_amp_bwd_decorator
+    def backward(ctx, *grad_outputs):  # type: ignore # pragma: no cover
+        inputs = ctx.inputs
+        model_instance = ctx.model_instance
+
+        # 遍历上下文存储的信息，给输入设定是否需要梯度
+        for i, need_grad in enumerate(ctx.grad_requirements):
+            inputs[i].requires_grad = need_grad
+
+        # 得到反向传播的输入
+        all_grads = [grad_outputs]
+
+        # 把模型分片和激活进行reverse（注意，没有把原始分配和激活进行reverse，这里是reverse之后的结果返回，不影响原始数据），因为计算梯度是从后向前，所以把-1放到第一个位置，依次类推，这样可以方便使用backward_load和backward_drop。
+        
+        # 然后遍历模型分片，针对每一个分片进行处理
+        for model_shard, activation in zip(
+            reversed(model_instance.model_slices), reversed(model_instance._activations[:-1])
+        ):
+            with torch.autograd.profiler.record_function("fairscale.experimental.nn.offload:backward_load"):
+                # Move the activation to the GPU.
+                # 把当前分片的激活移动到GPU
+                activation = tuple([a.cuda() for a in list(activation)])
+
+                # 把当前分片的模型移动到GPU
+                # Move the model shard to the GPU.
+                model_shard.backward_load()
+
+            # Store the BW pass state.
+            # 暂存反向传播状态
+            bwd_rng_state = torch.get_rng_state()
+
+            # TODO(anj-s): Why detach inputs?
+            activation = torch.utils.checkpoint.detach_variable(activation)
+            # Get the last gradient calculation.
+            final_grads = all_grads[-1] # 这将会是最终生成的梯度
+
+            if isinstance(activation, torch.Tensor):
+                activation = (activation,)
+            if isinstance(final_grads, torch.Tensor):
+                final_grads = (final_grads,)
+            # Iterate through all the inputs/outputs of a shard (there could be multiple).
+            chunked_grad_list: List[Any] = []
+            # Chunk the activation and grad based on the number of microbatches that are set.
+            # 因为可能有多个微批次，所以需要把梯度和激活分别做chunk操作
+            for chunked_activation, chunked_grad in zip(
+                torch.chunk(*activation, model_instance._num_microbatches),  # type: ignore
+                torch.chunk(*final_grads, model_instance._num_microbatches),  # type: ignore
+            ):
+                # Set the states to what it used to be before the forward pass.
+                torch.set_rng_state(ctx.fwd_rng_state) # 暂时使用前向传播状态
+
+                # 构建为list
+                if isinstance(chunked_activation, torch.Tensor):
+                    chunked_activation = (chunked_activation,)  # type: ignore
+                if isinstance(chunked_grad, torch.Tensor):
+                    chunked_grad = (chunked_grad,)  # type: ignore
+
+                # Since we need a grad value of a non leaf element we need to set these properties.
+                for a in chunked_activation:
+                    if a.dtype == torch.long:
+                        continue
+                    a.requires_grad = True # 因为需要计算非叶子结点，所以将其设置为需要梯度
+                    a.retain_grad()
+
+                with torch.autograd.profiler.record_function(
+                    "fairscale.experimental.nn.offload:forward_pass_with_enable_grad"
+                ):
+                    with torch.enable_grad():
+                        # calculate the output of the last shard wrt to the stored activation at the slice boundary.
+                        outputs = model_shard(*chunked_activation) # 前向传播
+
+                # Set the states back to what it was at the start of this function.
+                torch.set_rng_state(bwd_rng_state) # 恢复状态
+                
+                with torch.autograd.profiler.record_function("fairscale.experimental.nn.offload:backward_pass"):
+                    torch.autograd.backward(outputs, chunked_grad) # 反向传播
+                    
+                intermediate_grads = []
+                for a in chunked_activation:
+                    if a.grad is not None:
+                        intermediate_grads.append(a.grad)
+                if None not in intermediate_grads:
+                    chunked_grad_list += intermediate_grads
+             
+            # 把梯度列表添加到all_grads之上
+            if chunked_grad_list:
+                # Append the list of grads to the all_grads list and this should be on the GPU.
+                all_grads.append(torch.cat(chunked_grad_list).squeeze(-1))  # type: ignore
+                
+            with torch.autograd.profiler.record_function("fairscale.experimental.nn.offload:backward_drop"):
+                # Move the shard back to the CPU. This should move all the grad tensors to CPU as well.
+                # We don't need to move activations since we are using a copy of the tensors on the GPU.
+                model_shard.backward_drop() # 分区移动到CPU
+           
+        # 之前的reverse没有对 model_instance._activations 做修改
+        detached_inputs = model_instance._activations[0]
+        # 从输入之中拿到其梯度
+        grads = tuple(inp.grad if isinstance(inp, torch.Tensor) else inp for inp in detached_inputs)
+        return (None, None) + grads # 返回梯度
+</code></pre>
+<p>逻辑拓展如下：</p>
+<p><img src="https://img2022.cnblogs.com/blog/1850883/202201/1850883-20220124003837815-1138368818.jpg" alt="" loading="lazy"></p>
+<p>至此，FSDP 分析完毕，我们下一个系列将会通过 NVIDIA Megatron 来介绍模型并行，敬请期待。</p>
+<h2 id="0xff">0xFF</h2>
+<p><a href="https://arxiv.org/pdf/2101.06840.pdf" target="_blank" rel="noopener nofollow">https://arxiv.org/pdf/2101.06840.pdf</a></p>
+<p><a href="https://www.deepspeed.ai/tutorials/zero-offload/" target="_blank" rel="noopener nofollow">https://www.deepspeed.ai/tutorials/zero-offload/</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/deepspeed-extreme-scale-model-training-for-everyone/" target="_blank" rel="noopener nofollow">DeepSpeed: Extreme-scale model training for everyone</a></p>
+<p><a href="https://www.microsoft.com/en-us/research/blog/zero-infinity-and-deepspeed-unlocking-unprecedented-model-scale-for-deep-learning-training/" target="_blank" rel="noopener nofollow">https://www.microsoft.com/en-us/research/blog/zero-infinity-and-deepspeed-unlocking-unprecedented-model-scale-for-deep-learning-training/</a></p>
+<p><a href="https://www.marktechpost.com/2021/02/01/microsoft-and-the-university-of-california-merced-introduces-zero-offload-a-novel-heterogeneous-deeplearning-training-technology-to-train-multi-billion-parameter-models-on-a-single-gpu/" target="_blank" rel="noopener nofollow">https://www.marktechpost.com/2021/02/01/microsoft-and-the-university-of-california-merced-introduces-zero-offload-a-novel-heterogeneous-deeplearning-training-technology-to-train-multi-billion-parameter-models-on-a-single-gpu/</a></p>
+<p>[1] Li et al. <a href="https://arxiv.org/abs/2006.15704" target="_blank" rel="noopener nofollow">“PyTorch Distributed: Experiences on Accelerating Data Parallel Training”</a> VLDB 2020.</p>
+<p>[2] Cui et al. <a href="https://www.pdl.cmu.edu/PDL-FTP/CloudComputing/GeePS-cui-eurosys16.pdf" target="_blank" rel="noopener nofollow">“GeePS: Scalable deep learning on distributed GPUs with a GPU-specialized parameter server”</a> EuroSys 2016</p>
+<p>[3] Shoeybi et al. <a href="https://arxiv.org/abs/1909.08053" target="_blank" rel="noopener nofollow">“Megatron-LM: Training Multi-Billion Parameter Language Models Using Model Parallelism.”</a> arXiv preprint arXiv:1909.08053 (2019).</p>
+<p>[4] Narayanan et al. <a href="https://arxiv.org/abs/2104.04473" target="_blank" rel="noopener nofollow">“Efficient Large-Scale Language Model Training on GPU Clusters Using Megatron-LM.”</a> arXiv preprint arXiv:2104.04473 (2021).</p>
+<p>[5] Huang et al. <a href="https://arxiv.org/abs/1811.06965" target="_blank" rel="noopener nofollow">“GPipe: Efficient Training of Giant Neural Networks using Pipeline Parallelism.”</a> arXiv preprint arXiv:1811.06965 (2018).</p>
+<p>[6] Narayanan et al. <a href="https://cs.stanford.edu/~matei/papers/2019/sosp_pipedream.pdf" target="_blank" rel="noopener nofollow">“PipeDream: Generalized Pipeline Parallelism for DNN Training.”</a> SOSP 2019.</p>
+<p>[7] Narayanan et al. <a href="https://arxiv.org/abs/2006.09503" target="_blank" rel="noopener nofollow">“Memory-Efficient Pipeline-Parallel DNN Training.”</a> ICML 2021.</p>
+<p>[8] Shazeer et al. <a href="https://arxiv.org/abs/1701.06538" target="_blank" rel="noopener nofollow">“The Sparsely-Gated Mixture-of-Experts Layer Noam.”</a> arXiv preprint arXiv:1701.06538 (2017).</p>
+<p>[9] Lepikhin et al. <a href="https://arxiv.org/abs/2006.16668" target="_blank" rel="noopener nofollow">“GShard: Scaling Giant Models with Conditional Computation and Automatic Sharding.”</a> arXiv preprint arXiv:2006.16668 (2020).</p>
+<p>[10] Fedus et al. <a href="https://arxiv.org/abs/2101.03961" target="_blank" rel="noopener nofollow">“Switch Transformers: Scaling to Trillion Parameter Models with Simple and Efficient Sparsity.”</a> arXiv preprint arXiv:2101.03961 (2021).</p>
+<p>[11] Narang &amp; Micikevicius, et al. <a href="https://arxiv.org/abs/1710.03740" target="_blank" rel="noopener nofollow">“Mixed precision training.”</a> ICLR 2018.</p>
+<p>[12] Chen et al. 2016 <a href="https://arxiv.org/abs/1604.06174" target="_blank" rel="noopener nofollow">“Training Deep Nets with Sublinear Memory Cost.”</a> arXiv preprint arXiv:1604.06174 (2016).</p>
+<p>[13] Jain et al. <a href="https://www.microsoft.com/en-us/research/uploads/prod/2018/04/fiddle-gist-isca18.pdf" target="_blank" rel="noopener nofollow">“Gist: Efficient data encoding for deep neural network training.”</a> ISCA 2018.</p>
+<p>[14] Shazeer &amp; Stern. <a href="https://arxiv.org/abs/1804.04235" target="_blank" rel="noopener nofollow">“Adafactor: Adaptive learning rates with sublinear memory cost.”</a> arXiv preprint arXiv:1804.04235 (2018).</p>
+<p>[15] Anil et al. <a href="https://arxiv.org/abs/1901.11150" target="_blank" rel="noopener nofollow">“Memory-Efficient Adaptive Optimization.”</a> arXiv preprint arXiv:1901.11150 (2019).</p>
+<p>[16] Rajbhandari et al. <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener nofollow">“ZeRO: Memory Optimization Towards Training A Trillion Parameter Models Samyam.”</a> arXiv preprint arXiv:1910.02054 (2019).</p>
+
+</div>
+<div class="clear"></div>
+<div id="blog_post_info_block" role="contentinfo">
+    <div id="blog_post_info"></div>
+    <div class="clear"></div>
+    <div id="post_next_prev"></div>
+</div>
+            </div>
+            <div class="postDesc">posted @ 
+<span id="post-date" data-last-update-days="1199.3380315528043" data-date-created="BlogServer.Application.Dto.BlogPost.BlogPostDto" data-date-updated="2022-01-26 08:47">2022-01-26 08:47</span>&nbsp;
+<a href="https://www.cnblogs.com/rossiXYZ">罗西的思考</a>&nbsp;
+阅读(<span id="post_view_count">1438</span>)&nbsp;
+评论(<span id="post_comment_count">0</span>)&nbsp;
+&nbsp;
+<a href="javascript:void(0)" onclick="AddToWz(15837992);return false;">收藏</a>&nbsp;
+<a href="javascript:void(0)" onclick="reportManager.report({ currentUserId: '', targetType: 'blogPost', targetId: '15837992', targetLink: 'https://www.cnblogs.com/rossiXYZ/p/15837992.html', title: '[源码分析] Facebook如何训练超大模型--- (5)' })">举报</a>
+</div>
+        </div>
+        <script>
+    var cb_entryId = 15837992, cb_entryCreatedDate = '2022-01-26 08:47', cb_postType = 1, cb_postTitle = '[源码分析] Facebook如何训练超大模型--- (5)';
+    var allowComments = true, cb_blogId = 556264, cb_blogApp = 'rossiXYZ', cb_blogUserGuid = '3d1961d5-3b13-4975-9d25-08d753a9a8fd';
+    mermaidRender.render()
+    markdown_highlight()
+    zoomManager.apply("#cnblogs_post_body img:not(.code_img_closed):not(.code_img_opened)");    
+</script>
+        <a id="!comments"></a>
+<div id="blog-comments-placeholder"></div>
+<div id="comment_form" class="commentform">
+    <a name="commentform"></a>
+    <div id="divCommentShow"></div>
+    <div id="comment_nav"> 
+        <div class="comment-nav-right">
+            <span id="span_refresh_tips"></span><a href="#" onclick="return RefreshPage();">刷新页面</a><a href="#top">返回顶部</a>
+        </div>
+    </div>
+    <div id="comment_form_container"></div>
+    <div class="ad_text_commentbox" id="ad_text_under_commentbox"></div>
+        <div id="cnblogs_ch"></div>
+    <div id="opt_under_post"></div>
+        <div id="blog_c1" class="under-post-card">
+            <a href="https://www.doubao.com?channel=cnblogs&amp;source=hw_db_cnblogs&amp;type=lunt&amp;theme=bianc" rel="nofollow" target="_blank" onclick="countCreativeClicks('C1-字节-豆包')">
+                <img src="https://img2024.cnblogs.com/blog/35695/202412/35695-20241201072501456-2052907165.jpg" onload="countCreativeImpressions('C1-字节-豆包')" alt="" />
+                <span id="c1_impression" style="display:none"></span>
+            </a>
+        </div>
+    <div id="under_post_card1"></div>
+    <div id="under_post_card2"></div>
+    <div id="HistoryToday" class="under-post-card"></div>
+    <script type="text/javascript">
+        var commentManager = new blogCommentManager();
+        commentManager.renderComments(0);
+        fixPostBody();
+        window.footnoteTipManager.generateFootnoteTips();
+
+            window.tocManager.displayDisableTocTips = false;
+            window.tocManager.generateToc();
+            
+                setTimeout(function() { countViews(cb_blogId, cb_entryId); }, 50);
+            
+            deliverT2();
+            deliverC1C2();
+            loadNewsAndKb();
+            
+                LoadPostCategoriesTags(cb_blogId, cb_entryId);
+            
+            LoadPostInfoBlock(cb_blogId, cb_entryId, cb_blogApp, cb_blogUserGuid);
+            GetPrevNextPost(cb_entryId, cb_blogId, cb_entryCreatedDate, cb_postType);
+            loadOptUnderPost();
+            GetHistoryToday(cb_blogId, cb_blogApp, cb_entryCreatedDate);
+                </script>
+</div>
+
+    </div>
+</div>
+            </div>
+        </div>
+
+        <div id="sideBar">
+            <div id="sideBarMain">
+                <div id="sidebar_news" class="newsItem">
+    
+<h3 class="catListTitle">公告</h3>
+<div id="blog-news" class="sidebar-news">
+    <div id="sidebar_news_container">
+    </div>
+</div>
+<script>loadBlogNews();</script> 
+</div>
+<div id="sidebar_c3"></div>
+                <div id="calendar"><div id="blog-calendar" style="display:none"></div></div>                
+                <script>loadBlogDefaultCalendar();</script>
+                <div id="leftcontentcontainer">
+                    <!-- begin:SingleColumn -->
+                    <div id="blog-sidecolumn"></div>
+                    <script>loadBlogSideColumn();</script>
+                    <!-- end:  SingleColumn -->
+                </div>
+            </div>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <div class="clear"></div>
+    <div id="footer">
+        <!--done-->
+Copyright &copy; 2025 罗西的思考
+<br /><span id="poweredby">Powered by .NET 9.0 on Kubernetes</span>
+
+    </div>
+</div>
+
+
+    
+
+    <input type="hidden" id="antiforgery_token" value="CfDJ8Ct_7-Gh-gZNte6RB_khjDrH5ME4zWDRhPjp1q-KcZ3ZjTH5gnAOU0Q2o3ARSMuJPzXZtP_Ptgt8Clj_4Fllffq6DlN_pYWVVgVUCGmgD59wq7FFCQ-5r1pJVHzK0DxQh0E5e83QkPl5WYMAraytET4" />
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-M95P3TTWJZ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-M95P3TTWJZ');
+</script>
+<script defer src="https://hm.baidu.com/hm.js?866c9be12d4a814454792b1fd0fed295"></script>
+</body>
+</html>
